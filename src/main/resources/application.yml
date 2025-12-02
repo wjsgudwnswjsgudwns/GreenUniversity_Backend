@@ -1,0 +1,58 @@
+server:
+  port: 80
+  servlet: 
+    encoding:
+      charset: utf-8 
+      force: true
+  error:
+    include-exception: true
+    include-stacktrace: always
+    whitelabel:
+      enabled: false
+
+spring:
+  mvc:
+    # Disable view resolution since the frontend will be served by React. The JSP view resolver can be removed once all JSPs are migrated.
+    throw-exception-if-no-handler-found: true
+    dispatch-options-request: false
+    view:
+      prefix: /WEB-INF/view/
+      suffix: .jsp
+    hiddenmethod:
+      filter:
+        enabled: true
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+  datasource:
+    url: jdbc:mysql://localhost:3306/university_management?useSSL=false&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: root
+    password: 12345
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  # Configure JPA/Hibernate settings
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+    show-sql: true
+  sql:
+    init:
+      mode: always
+#      schema-locations:
+#        - classpath:db/table.sql
+#      data-locations:
+#        - classpath:db/data.sql
+  web:
+    cors:
+      allowed-origins: http://localhost:3000
+      allowed-methods: GET,POST,PUT,DELETE
+  output:
+    ansi:
+      enabled: always
+
+ # Removed mybatis configuration since the project now uses Spring Data JPA
+    
