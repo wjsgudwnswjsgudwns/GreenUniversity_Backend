@@ -9,5 +9,6 @@ public class PrincipalDto {
 	private String password;
 	private String userRole;
 	private String name;
+    private String email;
 	
 }

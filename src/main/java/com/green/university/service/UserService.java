@@ -24,11 +24,7 @@ import com.green.university.dto.response.StudentInfoDto;
 import com.green.university.dto.response.StudentInfoStatListDto;
 import com.green.university.dto.response.UserInfoForUpdateDto;
 import com.green.university.handler.exception.CustomRestfullException;
-import com.green.university.repository.interfaces.ProfessorRepository;
-import com.green.university.repository.interfaces.StaffRepository;
-import com.green.university.repository.interfaces.StuStatRepository;
-import com.green.university.repository.interfaces.StudentRepository;
-import com.green.university.repository.interfaces.UserRepository;
+
 import com.green.university.repository.model.Staff;
 import com.green.university.repository.model.Student;
 import com.green.university.repository.model.User;
@@ -185,7 +181,33 @@ public class UserService {
         principal.setId(user.getId());
         principal.setPassword(user.getPassword());
         principal.setUserRole(user.getUserRole());
-        // 필요하면 이름/이메일 등 추가 세팅
+
+        String role = user.getUserRole();
+        if ("student".equals(role)) {
+            Student student = studentJpaRepository.findById(user.getId())
+                    .orElseThrow(() -> new CustomRestfullException(
+                            "학생 정보를 찾을 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR));
+            principal.setName(student.getName());
+            principal.setEmail(student.getEmail());
+
+        } else if ("professor".equals(role)) {
+            com.green.university.repository.model.Professor professor =
+                    professorJpaRepository.findById(user.getId())
+                            .orElseThrow(() -> new CustomRestfullException(
+                                    "교수 정보를 찾을 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR));
+            principal.setName(professor.getName());
+            principal.setEmail(professor.getEmail());
+
+        } else if ("staff".equals(role)) {
+            Staff staff = staffJpaRepository.findById(user.getId())
+                    .orElseThrow(() -> new CustomRestfullException(
+                            "직원 정보를 찾을 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR));
+            principal.setName(staff.getName());
+            principal.setEmail(staff.getEmail());
+
+        } else {
+            throw new CustomRestfullException("지원하지 않는 사용자 유형입니다.", HttpStatus.BAD_REQUEST);
+        }
 
         return principal;
     }
@@ -491,6 +513,18 @@ public class UserService {
         professor.setEmail(dto.getEmail());
 
         professorJpaRepository.save(professor);
+    }
+    /**
+     * User 엔티티 단건 조회 (공용 조회용).
+     *
+     * @param userId
+     * @return User 엔티티
+     */
+    @Transactional(readOnly = true)
+    public User readUserById(Integer userId) {
+        return userJpaRepository.findById(userId)
+                .orElseThrow(() -> new CustomRestfullException(
+                        "사용자 정보를 찾을 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR));
     }
 
 }
