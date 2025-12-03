@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.green.university.dto.EvaluationDto;
 import com.green.university.dto.MyEvaluationDto;
 import com.green.university.handler.exception.CustomRestfullException;
-import com.green.university.repository.interfaces.EvaluationRepository;
 import com.green.university.repository.model.Evaluation;
 
 @Service

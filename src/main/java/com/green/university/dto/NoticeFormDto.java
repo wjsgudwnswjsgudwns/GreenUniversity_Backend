@@ -2,8 +2,8 @@ package com.green.university.dto;
 
 import java.sql.Timestamp;
 
-import javax.validation.constraints.NotEmpty;
-import javax.validation.constraints.Size;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 
 import org.springframework.web.multipart.MultipartFile;
 

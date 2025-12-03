@@ -2,9 +2,10 @@ package com.green.university.controller;
 
 import java.util.List;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.ResponseEntity;
@@ -169,55 +170,52 @@ public class UserController {
         return ResponseEntity.ok(body);
     }
 
-	/**
-	 * 학생 조회
-	 * 
-	 * @param model
-	 * @return 학생 조회 페이지
-	 */
+    //학생 조회 (첫 페이지 또는 필터링)
     @GetMapping("/studentList")
-    public ResponseEntity<?> showStudentList(@RequestParam(required = false) Integer studentId,
+    public ResponseEntity<?> showStudentList(
+            @RequestParam(required = false) Integer studentId,
             @RequestParam(required = false) Integer deptId) {
+
         StudentListForm studentListForm = new StudentListForm();
-        studentListForm.setPage(0);
-        if (studentId != null) {
-            studentListForm.setStudentId(studentId);
-        } else if (deptId != null) {
-            studentListForm.setDeptId(deptId);
-        }
-        Integer amount = studentService.readStudentAmount(studentListForm);
-        if (studentId != null) {
-            amount = 1;
-        }
-        List<Student> list = studentService.readStudentList(studentListForm);
+        studentListForm.setPage(0); // 첫 페이지는 0
+        studentListForm.setStudentId(studentId);
+        studentListForm.setDeptId(deptId);
+
+        Page<Student> studentPage = studentService.readStudentList(studentListForm);
+
         Map<String, Object> body = new HashMap<>();
-        body.put("listCount", Math.ceil(amount / 20.0));
-        body.put("studentList", list);
+        body.put("totalPages", studentPage.getTotalPages());
+        body.put("totalElements", studentPage.getTotalElements());
+        body.put("currentPage", 1); // 사용자에게는 1부터 시작
+        body.put("studentList", studentPage.getContent());
         body.put("deptId", deptId);
-        body.put("page", 1);
+        body.put("studentId", studentId);
+
         return ResponseEntity.ok(body);
     }
 
-	/**
-	 * 학생 조회
-	 * 
-	 * @param model
-	 * @return 학생 조회 페이지
-	 */
+    // 학생 조회 (페이지별)
     @GetMapping("/studentList/{page}")
-    public ResponseEntity<?> showStudentListByPage(@PathVariable Integer page,
-            @RequestParam(required = false) Integer deptId) {
+    public ResponseEntity<?> showStudentListByPage(
+            @PathVariable Integer page,
+            @RequestParam(required = false) Integer deptId,
+            @RequestParam(required = false) Integer studentId) {
+
         StudentListForm studentListForm = new StudentListForm();
-        if (deptId != null) {
-            studentListForm.setDeptId(deptId);
-        }
-        studentListForm.setPage((page - 1) * 20);
-        Integer amount = studentService.readStudentAmount(studentListForm);
-        List<Student> list = studentService.readStudentList(studentListForm);
+        studentListForm.setPage(page - 1); // 0-based index
+        studentListForm.setDeptId(deptId);
+        studentListForm.setStudentId(studentId);
+
+        Page<Student> studentPage = studentService.readStudentList(studentListForm);
+
         Map<String, Object> body = new HashMap<>();
-        body.put("listCount", Math.ceil(amount / 20.0));
-        body.put("studentList", list);
-        body.put("page", page);
+        body.put("totalPages", studentPage.getTotalPages());
+        body.put("totalElements", studentPage.getTotalElements());
+        body.put("currentPage", page);
+        body.put("studentList", studentPage.getContent());
+        body.put("deptId", deptId);
+        body.put("studentId", studentId);
+
         return ResponseEntity.ok(body);
     }
 

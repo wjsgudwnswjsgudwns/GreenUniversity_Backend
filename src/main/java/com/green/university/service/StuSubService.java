@@ -15,10 +15,6 @@ import com.green.university.dto.response.StuSubAppDto;
 import com.green.university.dto.response.StuSubDayTimeDto;
 import com.green.university.dto.response.StuSubSumGradesDto;
 import com.green.university.handler.exception.CustomRestfullException;
-import com.green.university.repository.interfaces.PreStuSubRepository;
-import com.green.university.repository.interfaces.StuSubDetailRepository;
-import com.green.university.repository.interfaces.StuSubRepository;
-import com.green.university.repository.interfaces.SubjectRepository;
 import com.green.university.utils.Define;
 import com.green.university.utils.StuSubUtil;
 

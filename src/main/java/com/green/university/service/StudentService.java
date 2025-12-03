@@ -3,6 +3,9 @@ package com.green.university.service;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,37 +32,26 @@ public class StudentService {
 	 * @param studentListForm
 	 * @return 학생 리스트
 	 */
-	@Transactional
-    public List<Student> readStudentList(StudentListForm studentListForm) {
-        // Fetch all students via JPA and then filter/paginate based on the form.
-        List<Student> all = studentJpaRepository.findAll();
-
-        // Filter by student ID if present
-        if (studentListForm.getStudentId() != null) {
-            return all.stream()
-                    .filter(s -> s.getId().equals(studentListForm.getStudentId()))
-                    .collect(Collectors.toList());
-        }
-
-        // Filter by department ID if present
-        if (studentListForm.getDeptId() != null) {
-            return all.stream()
-                    .filter(s -> s.getDepartment() != null && s.getDepartment().getId().equals(studentListForm.getDeptId()))
-                    .collect(Collectors.toList());
-        }
-
-        // If page is provided, perform simple pagination (20 per page)
-        Integer rawPage = studentListForm.getPage();
-        int page = (rawPage == null || rawPage < 1) ? 1 : rawPage;
-
+    @Transactional(readOnly = true)
+    public Page<Student> readStudentList(StudentListForm studentListForm) {
         int pageSize = 20;
-        int fromIndex = (page - 1) * pageSize;
-        int toIndex = Math.min(fromIndex + pageSize, all.size());
+        int page = (studentListForm.getPage() == null || studentListForm.getPage() < 0)
+                ? 0 : studentListForm.getPage();
 
-        if (fromIndex >= all.size()) {
-            return List.of();
+        Pageable pageable = PageRequest.of(page, pageSize);
+
+        // studentId로 조회하는 경우
+        if (studentListForm.getStudentId() != null) {
+            return studentJpaRepository.findById(studentListForm.getStudentId(), pageable);
         }
-        return all.subList(fromIndex, toIndex);
+
+        // deptId로 조회하는 경우
+        if (studentListForm.getDeptId() != null) {
+            return studentJpaRepository.findByDepartmentId(studentListForm.getDeptId(), pageable);
+        }
+
+        // 전체 조회
+        return studentJpaRepository.findAll(pageable);
     }
 
 	/**
@@ -67,15 +59,20 @@ public class StudentService {
 	 * @param studentListForm
 	 * @return 학생 수
 	 */
-	@Transactional
-    public Integer readStudentAmount(StudentListForm studentListForm) {
-        List<Student> all = studentJpaRepository.findAll();
-        if (studentListForm.getDeptId() != null) {
-            return (int) all.stream()
-                    .filter(s -> s.getDepartment() != null && s.getDepartment().getId().equals(studentListForm.getDeptId()))
-                    .count();
+    @Transactional(readOnly = true)
+    public long readStudentAmount(StudentListForm studentListForm) {
+        // studentId로 조회하는 경우
+        if (studentListForm.getStudentId() != null) {
+            return studentJpaRepository.existsById(studentListForm.getStudentId()) ? 1 : 0;
         }
-        return all.size();
+
+        // deptId로 조회하는 경우
+        if (studentListForm.getDeptId() != null) {
+            return studentJpaRepository.countByDepartmentId(studentListForm.getDeptId());
+        }
+
+        // 전체 학생 수
+        return studentJpaRepository.count();
     }
 
 	/**

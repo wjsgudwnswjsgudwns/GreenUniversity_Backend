@@ -10,7 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.green.university.dto.ScheduleDto;
 import com.green.university.dto.ScheduleFormDto;
 import com.green.university.handler.exception.CustomRestfullException;
-import com.green.university.repository.interfaces.ScheuleRepository;
 import com.green.university.repository.ScheduleJpaRepository;
 import com.green.university.repository.StaffJpaRepository;
 import com.green.university.repository.model.Schedule;
