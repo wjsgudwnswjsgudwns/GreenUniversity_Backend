@@ -1,7 +1,6 @@
 package com.green.university.dto;
 
-import jakarta.validation.
-constraints.*;
+import javax.validation.constraints.*;
 
 import lombok.Data;
 
