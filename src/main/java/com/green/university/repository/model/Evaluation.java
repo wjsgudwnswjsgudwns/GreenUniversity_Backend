@@ -2,7 +2,7 @@ package com.green.university.repository.model;
 
 import lombok.*;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 
 @Entity
 @Getter

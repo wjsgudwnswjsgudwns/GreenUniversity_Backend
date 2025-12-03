@@ -135,6 +135,7 @@ public class UserService {
 
     @Transactional
     public void createStudentToStudentAndUser(CreateStudentDto createStudentDto) {
+        System.out.println("DEBUG Student DTO = " + createStudentDto);
         // JPA를 사용하여 학생을 생성하고 user_tb에 계정을 추가한다.
         com.green.university.repository.model.Student student = new com.green.university.repository.model.Student();
         student.setName(createStudentDto.getName());
