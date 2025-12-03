@@ -1,7 +1,6 @@
 package com.green.university.dto;
 
-import jakarta.validation.
-constraints.Size;
+import javax.validation.constraints.Size;
 
 import lombok.Data;
 

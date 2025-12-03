@@ -43,14 +43,6 @@ import com.green.university.utils.TempPassword;
 @Service
 public class UserService {
 
-    // MyBatis 레포지토리
-//    @Autowired
-//    private StaffRepository staffRepository;
-//    @Autowired
-//    private ProfessorRepository professorRepository;
-//    @Autowired
-//    private StudentRepository studentRepository;
-
 
     // JPA 레포지토리: 신규 생성 시 사용
     @Autowired
@@ -180,14 +172,30 @@ public class UserService {
             throw new CustomRestfullException(Define.WRONG_PASSWORD, HttpStatus.BAD_REQUEST);
         }
 
-        // User → PrincipalDto 매핑 (필드는 프로젝트 상황에 맞게 수정)
-        PrincipalDto principal = new PrincipalDto();
-        principal.setId(user.getId());
-        principal.setPassword(user.getPassword());
-        principal.setUserRole(user.getUserRole());
-        // 필요하면 이름/이메일 등 추가 세팅
+        String name = null;
+        String userRole = user.getUserRole();
 
-        return principal;
+        // 역할에 따라 이름 조회
+        if ("student".equals(userRole)) {
+            name = studentJpaRepository.findById(user.getId())
+                    .map(Student::getName)
+                    .orElse(null);
+        } else if ("professor".equals(userRole)) {
+            name = professorJpaRepository.findById(user.getId())
+                    .map(com.green.university.repository.model.Professor::getName)
+                    .orElse(null);
+        } else if ("staff".equals(userRole)) {
+            name = staffJpaRepository.findById(user.getId())
+                    .map(Staff::getName)
+                    .orElse(null);
+        }
+
+        return PrincipalDto.builder()
+                .id(user.getId())
+                .password(user.getPassword())
+                .userRole(userRole)
+                .name(name)
+                .build();
     }
 
     public UserInfoForUpdateDto readStudentInfoForUpdate(Integer userId) {
@@ -492,6 +500,82 @@ public class UserService {
 
         professorJpaRepository.save(professor);
     }
+
+
+    /**
+     * 사용자 ID로 Principal 정보 조회
+     * JWT 토큰에서 추출한 사용자 ID로 전체 정보를 가져올 때 사용
+     */
+    @Transactional(readOnly = true)
+    public PrincipalDto readPrincipalById(Integer userId) {
+        User user = userJpaRepository.findById(userId)
+                .orElseThrow(() -> new CustomRestfullException(
+                        "사용자를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        String name = null;
+        String userRole = user.getUserRole();
+
+        // 역할에 따라 이름 조회
+        if ("student".equals(userRole)) {
+            name = studentJpaRepository.findById(userId)
+                    .map(Student::getName)
+                    .orElse(null);
+        } else if ("professor".equals(userRole)) {
+            name = professorJpaRepository.findById(userId)
+                    .map(com.green.university.repository.model.Professor::getName)
+                    .orElse(null);
+        } else if ("staff".equals(userRole)) {
+            name = staffJpaRepository.findById(userId)
+                    .map(Staff::getName)
+                    .orElse(null);
+        }
+
+        return PrincipalDto.builder()
+                .id(user.getId())
+                .password(user.getPassword())
+                .userRole(userRole)
+                .name(name)
+                .build();
+    }
+
+    // UserService에 추가할 헬퍼 메서드들
+
+    /**
+     * User 엔티티를 PrincipalDto로 변환
+     * 역할에 따라 이름을 조회하여 설정
+     */
+    private PrincipalDto convertToPrincipalDto(User user) {
+        String name = getNameByUserRole(user.getId(), user.getUserRole());
+
+        return PrincipalDto.builder()
+                .id(user.getId())
+                .password(user.getPassword())
+                .userRole(user.getUserRole())
+                .name(name)
+                .build();
+    }
+
+    /**
+     * 사용자 역할에 따라 이름 조회
+     */
+    private String getNameByUserRole(Integer userId, String userRole) {
+        if ("student".equals(userRole)) {
+            return studentJpaRepository.findById(userId)
+                    .map(Student::getName)
+                    .orElse(null);
+        } else if ("professor".equals(userRole)) {
+            return professorJpaRepository.findById(userId)
+                    .map(com.green.university.repository.model.Professor::getName)
+                    .orElse(null);
+        } else if ("staff".equals(userRole)) {
+            return staffJpaRepository.findById(userId)
+                    .map(Staff::getName)
+                    .orElse(null);
+        }
+        return null;
+    }
+
+
 
 }
 

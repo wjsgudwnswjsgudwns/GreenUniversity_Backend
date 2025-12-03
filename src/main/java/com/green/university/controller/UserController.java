@@ -2,8 +2,7 @@ package com.green.university.controller;
 
 import java.util.List;
 
-import jakarta.validation.
-Valid;
+import javax.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -49,12 +48,12 @@ public class UserController {
 	/**
 	 * @return staff 입력 페이지
 	 */
-//    @GetMapping("/staff")
-//    public ResponseEntity<Map<String, String>> createStaff() {
-//        Map<String, String> body = new HashMap<>();
-//        body.put("message", "직원 정보 입력을 위한 페이지입니다.");
-//        return ResponseEntity.ok(body);
-//    }
+    @GetMapping("/staff")
+    public ResponseEntity<Map<String, String>> createStaff() {
+        Map<String, String> body = new HashMap<>();
+        body.put("message", "직원 정보 입력을 위한 페이지입니다.");
+        return ResponseEntity.ok(body);
+    }
 
 	/**
 	 * staff 입력 post 처리
@@ -73,12 +72,12 @@ public class UserController {
 	/**
 	 * @return professor 입력 페이지
 	 */
-//    @GetMapping("/professor")
-//    public ResponseEntity<Map<String, String>> createProfessor() {
-//        Map<String, String> body = new HashMap<>();
-//        body.put("message", "교수 정보 입력을 위한 페이지입니다.");
-//        return ResponseEntity.ok(body);
-//    }
+    @GetMapping("/professor")
+    public ResponseEntity<Map<String, String>> createProfessor() {
+        Map<String, String> body = new HashMap<>();
+        body.put("message", "교수 정보 입력을 위한 페이지입니다.");
+        return ResponseEntity.ok(body);
+    }
 
 	/**
 	 * staff 입력 post 처리
@@ -97,12 +96,12 @@ public class UserController {
 	/**
 	 * @return student 입력 페이지
 	 */
-//    @GetMapping("/student")
-//    public ResponseEntity<Map<String, String>> createStudent() {
-//        Map<String, String> body = new HashMap<>();
-//        body.put("message", "학생 정보 입력을 위한 페이지입니다.");
-//        return ResponseEntity.ok(body);
-//    }
+    @GetMapping("/student")
+    public ResponseEntity<Map<String, String>> createStudent() {
+        Map<String, String> body = new HashMap<>();
+        body.put("message", "학생 정보 입력을 위한 페이지입니다.");
+        return ResponseEntity.ok(body);
+    }
 
 	/**
 	 * student 입력 post 처리
@@ -180,7 +179,7 @@ public class UserController {
     public ResponseEntity<?> showStudentList(@RequestParam(required = false) Integer studentId,
             @RequestParam(required = false) Integer deptId) {
         StudentListForm studentListForm = new StudentListForm();
-        studentListForm.setPage(1);
+        studentListForm.setPage(0);
         if (studentId != null) {
             studentListForm.setStudentId(studentId);
         } else if (deptId != null) {
@@ -208,11 +207,6 @@ public class UserController {
     @GetMapping("/studentList/{page}")
     public ResponseEntity<?> showStudentListByPage(@PathVariable Integer page,
             @RequestParam(required = false) Integer deptId) {
-
-        if (page == null || page < 1) {
-            page = 1;
-        }
-
         StudentListForm studentListForm = new StudentListForm();
         if (deptId != null) {
             studentListForm.setDeptId(deptId);

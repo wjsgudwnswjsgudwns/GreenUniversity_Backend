@@ -1,5 +1,5 @@
 server:
-  port: 80
+  port: 8881
   servlet: 
     encoding:
       charset: utf-8 
@@ -26,9 +26,9 @@ spring:
       max-file-size: 20MB
       max-request-size: 20MB
   datasource:
-    url: jdbc:mysql://localhost:3306/university_management?useSSL=false&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: root
-    password: 12345
+    url: jdbc:mysql://team2-free-project-mysql-db.crwceg2wuy6s.ap-northeast-2.rds.amazonaws.com/greendb
+    username: admin
+    password: 12345678
     driver-class-name: com.mysql.cj.jdbc.Driver
   # Configure JPA/Hibernate settings
   jpa:
@@ -55,4 +55,7 @@ spring:
       enabled: always
 
  # Removed mybatis configuration since the project now uses Spring Data JPA
-    
+
+jwt:
+  secret: myScretKey0000fdafadsdfdsafdasffsafsafasfdfdfsdafafsasdyasdyasdasduasbdhafjkshfbahwefbakvbagkcvadsv
+  expiration: 36000000

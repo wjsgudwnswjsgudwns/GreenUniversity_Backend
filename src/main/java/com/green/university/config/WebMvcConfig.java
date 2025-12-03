@@ -50,10 +50,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
 				.addResourceLocations("file:///C:\\spring_upload\\universityManagement\\upload/");
 	}
 
-	@Bean
-	public PasswordEncoder passwordEncoder() {
-
-		return new BCryptPasswordEncoder();
-	}
+//	@Bean
+//	public PasswordEncoder passwordEncoder() {
+//
+//		return new BCryptPasswordEncoder();
+//	}
 
 }

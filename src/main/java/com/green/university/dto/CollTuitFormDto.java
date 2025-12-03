@@ -1,11 +1,8 @@
 package com.green.university.dto;
 
-import jakarta.validation.
-constraints.NotBlank;
-import jakarta.validation.
-constraints.NotEmpty;
-import jakarta.validation.
-constraints.NotNull;
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.NotEmpty;
+import javax.validation.constraints.NotNull;
 
 import com.green.university.repository.model.College;
 import com.green.university.utils.NumberUtil;

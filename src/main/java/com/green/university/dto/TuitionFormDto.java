@@ -1,11 +1,8 @@
 package com.green.university.dto;
 
-import jakarta.validation.
-constraints.NotEmpty;
-import jakarta.validation.
-constraints.NotNull;
-import jakarta.validation.
-constraints.Size;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import lombok.Data;
 
