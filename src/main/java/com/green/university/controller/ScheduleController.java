@@ -23,6 +23,9 @@ import com.green.university.handler.exception.CustomRestfullException;
 import com.green.university.repository.model.Schedule;
 import com.green.university.service.ScheuleService;
 
+/**
+ * 학사일정 REST Controller
+ */
 @RestController
 @RequestMapping("/api/schedule")
 public class ScheduleController {
@@ -30,22 +33,31 @@ public class ScheduleController {
     @Autowired
     private ScheuleService scheuleService;
 
-    // 학사일정 전체 조회 (월별 그룹핑)
+    /**
+     * 학사일정 전체 조회 (월별 그룹핑)
+     * GET /api/schedule
+     */
     @GetMapping("")
     public ResponseEntity<List<ScheduleDto>> getScheduleList() {
         List<ScheduleDto> scheduleList = scheuleService.readScheduleDto();
         return ResponseEntity.ok(scheduleList);
     }
 
-    // 학사일정 관리 페이지용 목록 조회
+    /**
+     * 학사일정 관리 페이지용 목록 조회
+     * GET /api/schedule/manage
+     */
     @GetMapping("/manage")
     public ResponseEntity<List<Schedule>> getScheduleManageList() {
         List<Schedule> scheduleList = scheuleService.readSchedule();
         return ResponseEntity.ok(scheduleList);
     }
 
-    // 학사일정 상세 조회 - 숫자만 매칭되도록 정규식 적용
-    @GetMapping("/{id:[0-9]+}")
+    /**
+     * 학사일정 상세 조회
+     * GET /api/schedule/{id}
+     */
+    @GetMapping("/{id}")
     public ResponseEntity<ScheduleDto> getScheduleDetail(@PathVariable Integer id) {
         ScheduleDto schedule = scheuleService.readScheduleById(id);
 
@@ -56,7 +68,10 @@ public class ScheduleController {
         return ResponseEntity.ok(schedule);
     }
 
-    // 학사일정 등록
+    /**
+     * 학사일정 등록
+     * POST /api/schedule
+     */
     @PostMapping("")
     public ResponseEntity<Map<String, String>> createSchedule(
             @RequestBody ScheduleFormDto scheduleFormDto,
@@ -73,9 +88,8 @@ public class ScheduleController {
             throw new CustomRestfullException("내용을 입력해주세요", HttpStatus.BAD_REQUEST);
         }
 
-        // 인증된 사용자 ID 가져오기
-        String username = authentication.getName();
-        Integer staffId = Integer.parseInt(username);
+        // 인증된 사용자 ID 가져오기 (JWT에서)
+        Integer staffId = Integer.parseInt(authentication.getName());
 
         scheuleService.createSchedule(staffId, scheduleFormDto);
 
@@ -85,8 +99,11 @@ public class ScheduleController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    // 학사일정 수정
-    @PutMapping("/{id:[0-9]+}")
+    /**
+     * 학사일정 수정
+     * PUT /api/schedule/{id}
+     */
+    @PutMapping("/{id}")
     public ResponseEntity<Map<String, String>> updateSchedule(
             @PathVariable Integer id,
             @RequestBody ScheduleFormDto scheduleFormDto) {
@@ -104,8 +121,11 @@ public class ScheduleController {
         return ResponseEntity.ok(response);
     }
 
-    // 학사일정 삭제
-    @DeleteMapping("/{id:[0-9]+}")
+    /**
+     * 학사일정 삭제
+     * DELETE /api/schedule/{id}
+     */
+    @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, String>> deleteSchedule(@PathVariable Integer id) {
         int result = scheuleService.deleteSchedule(id);
 

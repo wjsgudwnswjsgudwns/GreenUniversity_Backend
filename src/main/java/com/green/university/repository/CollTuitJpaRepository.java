@@ -1,10 +1,13 @@
 package com.green.university.repository;
 
+import com.green.university.repository.model.College;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.green.university.repository.model.CollTuit;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import java.util.List;
 
 /**
  * JPA repository for {@link CollTuit} entities.
@@ -28,4 +31,6 @@ public interface CollTuitJpaRepository extends JpaRepository<CollTuit, Integer> 
 
     // 수정
     // Service에서 findById()로 조회 후 entity.setAmount() 하고 save() 사용
+
+    List<CollTuit> findAllByOrderByCollegeIdAsc();
 }

@@ -3,6 +3,7 @@ package com.green.university.controller;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.green.university.dto.response.SyllabusResponseDto;
 import com.green.university.repository.model.SyllaBus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -47,7 +48,7 @@ public class SubjectController {
         List<SubjectDto> subjectList = subjectService.readSubjectList();
         int subjectCount = subjectList.size();
         int pageCount = (int) Math.ceil(subjectCount / 20.0);
-        List<SubjectDto> subjectListLimit = subjectService.readSubjectListPage((page - 1) * 20);
+        List<SubjectDto> subjectListLimit = subjectService.readSubjectListPage(page);
         List<Department> deptList = collegeService.readDeptAll();
         List<String> subNameList = new ArrayList<>();
         for (SubjectDto subject : subjectList) {
@@ -68,7 +69,17 @@ public class SubjectController {
 	// 전체 강의 목록에서 필터링
     @GetMapping("/list/search")
     public ResponseEntity<?> readSubjectListSearch(@Validated AllSubjectSearchFormDto allSubjectSearchFormDto) {
+
+        System.out.println("검색 파라미터:");
+        System.out.println("subYear: " + allSubjectSearchFormDto.getSubYear());
+        System.out.println("semester: " + allSubjectSearchFormDto.getSemester());
+        System.out.println("deptId: " + allSubjectSearchFormDto.getDeptId());
+        System.out.println("name: " + allSubjectSearchFormDto.getName());
+
         List<SubjectDto> subjectList = subjectService.readSubjectListSearch(allSubjectSearchFormDto);
+
+        System.out.println("검색 결과: " + subjectList.size() + "건");
+
         int subjectCount = subjectList.size();
         List<Department> deptList = collegeService.readDeptAll();
         List<String> subNameList = new ArrayList<>();
@@ -85,15 +96,10 @@ public class SubjectController {
         return ResponseEntity.ok(body);
     }
 
-	/**
-	 * @author 김지현
-	 * @param model
-	 * @param subjectId
-	 * @return 강의계획서 조회
-	 */
+	// 강의계획서 조회
     @GetMapping("/syllabus/{subjectId}")
     public ResponseEntity<?> readSyllabus(@PathVariable Integer subjectId) {
-        SyllaBus readSyllabusDto = professorService.readSyllabus(subjectId);
+        SyllabusResponseDto readSyllabusDto = professorService.readSyllabus(subjectId);
         if (readSyllabusDto.getOverview() != null) {
             readSyllabusDto.setOverview(readSyllabusDto.getOverview().replace("\r\n", "<br>"));
         }

@@ -2,8 +2,11 @@ package com.green.university.service;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -101,8 +104,8 @@ public class SubjectService {
         // 페이지 번호는 1부터 시작. 20개씩 조회한다.
         if (page == null || page < 1) page = 1;
         int pageSize = 20;
-        org.springframework.data.domain.Page<Subject> pageResult = subjectJpaRepository
-                .findAll(org.springframework.data.domain.PageRequest.of(page - 1, pageSize));
+        Page<Subject> pageResult = subjectJpaRepository
+                .findAll(PageRequest.of(page - 1, pageSize));
         List<SubjectDto> dtoList = new java.util.ArrayList<>();
         for (Subject sub : pageResult.getContent()) {
             SubjectDto dto = new SubjectDto();
@@ -145,18 +148,20 @@ public class SubjectService {
 	 * @param allSubjectSearchFormDto
 	 * @return 전체 강의 목록에서 필터링할 때 출력할 강의
 	 */
-	@Transactional
-	public List<SubjectDto> readSubjectListSearch(AllSubjectSearchFormDto allSubjectSearchFormDto) {
+    @Transactional
+    public List<SubjectDto> readSubjectListSearch(AllSubjectSearchFormDto allSubjectSearchFormDto) {
         // 검색 조건에 따라 필터링한다. 우선 전체 목록을 가져와 메모리에서 필터링한다.
         List<SubjectDto> allList = readSubjectList();
-        java.util.stream.Stream<SubjectDto> stream = allList.stream();
+        Stream<SubjectDto> stream = allList.stream();
+
         if (allSubjectSearchFormDto.getSubYear() != null) {
             stream = stream.filter(s -> allSubjectSearchFormDto.getSubYear().equals(s.getSubYear()));
         }
         if (allSubjectSearchFormDto.getSemester() != null) {
             stream = stream.filter(s -> allSubjectSearchFormDto.getSemester().equals(s.getSemester()));
         }
-        if (allSubjectSearchFormDto.getDeptId() != null) {
+        // ⭐ deptId가 -1이 아닐 때만 필터링
+        if (allSubjectSearchFormDto.getDeptId() != null && allSubjectSearchFormDto.getDeptId() != -1) {
             stream = stream.filter(s -> allSubjectSearchFormDto.getDeptId().equals(s.getDeptId()));
         }
         if (allSubjectSearchFormDto.getName() != null && !allSubjectSearchFormDto.getName().isEmpty()) {
@@ -164,7 +169,8 @@ public class SubjectService {
             stream = stream.filter(s -> s.getName() != null && s.getName().contains(name));
         }
         List<SubjectDto> filtered = stream.collect(Collectors.toList());
-        // 페이징
+
+        // 검색 결과에서는 페이징을 제거하거나, 페이지 파라미터가 없으면 전체 반환
         if (allSubjectSearchFormDto.getPage() != null && allSubjectSearchFormDto.getPage() > 0) {
             int page = allSubjectSearchFormDto.getPage();
             int pageSize = 20;
@@ -177,8 +183,7 @@ public class SubjectService {
             }
         }
         return filtered;
-	}
-
+    }
 	/**
 	 * @return 수강 신청에 사용할 강의 정보 (학생용) 현재 연도-학기에 해당하는 강의만 출력됨
 	 */
@@ -218,7 +223,7 @@ public class SubjectService {
 	public List<SubjectDto> readSubjectListSearchByCurrentSemester(CurrentSemesterSubjectSearchFormDto dto) {
         // 현재 학기 강의 목록을 먼저 가져와서 추가 조건(type, deptId, name)으로 필터링
         List<SubjectDto> filtered = readSubjectListByCurrentSemester();
-        java.util.stream.Stream<SubjectDto> stream = filtered.stream();
+        Stream<SubjectDto> stream = filtered.stream();
         if (dto.getType() != null && !dto.getType().isEmpty()) {
             stream = stream.filter(s -> s.getType() != null && s.getType().equals(dto.getType()));
         }

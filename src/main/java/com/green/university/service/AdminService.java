@@ -68,7 +68,7 @@ public class AdminService {
     @Transactional
     public List<College> readCollege() {
         // JPA를 사용하여 전체 단과대 목록 조회
-        return collegeJpaRepository.findAll();
+        return collegeJpaRepository.findAllByOrderByIdAsc();
     }
 
 	/**
@@ -108,7 +108,7 @@ public class AdminService {
 	 */
     public List<Department> readDepartment() {
         // JPA를 사용하여 전체 학과 목록 조회
-        return departmentJpaRepository.findAll();
+        return departmentJpaRepository.findAllByOrderByIdAsc();
     }
 
 	/**
@@ -170,7 +170,7 @@ public class AdminService {
 	 */
     public List<CollTuitFormDto> readCollTuit() {
         // JPA를 사용하여 등록금 목록 조회 후 DTO 변환
-        List<CollTuit> collTuition = collTuitJpaRepository.findAll();
+        List<CollTuit> collTuition = collTuitJpaRepository.findAllByOrderByCollegeIdAsc();
         List<CollTuitFormDto> dtos = new java.util.ArrayList<>();
         for (CollTuit ct : collTuition) {
             CollTuitFormDto dto = new CollTuitFormDto();
@@ -244,7 +244,7 @@ public class AdminService {
 	 */
     public List<Room> readRoom() {
         // JPA를 사용하여 전체 강의실 조회
-        return roomJpaRepository.findAll();
+        return roomJpaRepository.findAllByOrderByIdAsc();
     }
 
 	/**
@@ -323,7 +323,7 @@ public class AdminService {
 	 */
 	public List<Subject> readSubject() {
         // JPA를 사용하여 전체 과목 목록을 조회한다.
-        return subjectJpaRepository.findAll();
+        return subjectJpaRepository.findAllByOrderByIdAsc();
 	}
 
 	/**
