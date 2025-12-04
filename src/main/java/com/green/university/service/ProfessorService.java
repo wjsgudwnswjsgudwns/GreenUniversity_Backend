@@ -19,11 +19,7 @@ import com.green.university.dto.response.StudentInfoForProfessorDto;
 import com.green.university.dto.response.SubjectForProfessorDto;
 import com.green.university.dto.response.SubjectPeriodForProfessorDto;
 import com.green.university.handler.exception.CustomRestfullException;
-import com.green.university.repository.interfaces.ProfessorRepository;
-import com.green.university.repository.interfaces.StuSubDetailRepository;
-import com.green.university.repository.interfaces.StuSubRepository;
-import com.green.university.repository.interfaces.SubjectRepository;
-import com.green.university.repository.interfaces.SyllaBusRepository;
+
 
 /**
  * 

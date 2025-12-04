@@ -16,6 +16,7 @@ public class MeetingJoinInfoResDto {
     private LocalDateTime endAt;
     private String status;          // SCHEDULED / IN_PROGRESS / ...
 
+    private Integer userId;         // 실제 식별용
     private String displayName;     // Janus에 넘길 닉네임 (예: "홍길동(교수)")
     private String userRole;        // student / professor / staff
 }
