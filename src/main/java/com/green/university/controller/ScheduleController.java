@@ -1,115 +1,121 @@
 package com.green.university.controller;
 
+import java.util.HashMap;
 import java.util.List;
-
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.ResponseEntity;
-import java.util.HashMap;
-import java.util.Map;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.green.university.dto.ScheduleDto;
 import com.green.university.dto.ScheduleFormDto;
-import com.green.university.dto.response.PrincipalDto;
 import com.green.university.handler.exception.CustomRestfullException;
 import com.green.university.repository.model.Schedule;
 import com.green.university.service.ScheuleService;
-import com.green.university.utils.Define;
 
-/**
- * 
- * @author 편용림
- *
- */
-
-/**
- * 학사 일정 관리를 위한 REST 컨트롤러입니다. 일정 조회, 작성, 삭제, 수정 등의 기능을
- * JSON 형식으로 제공합니다.
- */
 @RestController
 @RequestMapping("/api/schedule")
 public class ScheduleController {
 
-	@Autowired
-	private HttpSession session;
+    @Autowired
+    private ScheuleService scheuleService;
 
-	@Autowired
-	private ScheuleService scheuleService;
-
-	/**
-	 * 학사일정 페이지
-	 * 
-	 * @param model
-	 * @return
-	 */
+    // 학사일정 전체 조회 (월별 그룹핑)
     @GetMapping("")
-    public ResponseEntity<List<Schedule>> schedule() {
-        List<Schedule> schedule = scheuleService.readSchedule();
+    public ResponseEntity<List<ScheduleDto>> getScheduleList() {
+        List<ScheduleDto> scheduleList = scheuleService.readScheduleDto();
+        return ResponseEntity.ok(scheduleList);
+    }
+
+    // 학사일정 관리 페이지용 목록 조회
+    @GetMapping("/manage")
+    public ResponseEntity<List<Schedule>> getScheduleManageList() {
+        List<Schedule> scheduleList = scheuleService.readSchedule();
+        return ResponseEntity.ok(scheduleList);
+    }
+
+    // 학사일정 상세 조회 - 숫자만 매칭되도록 정규식 적용
+    @GetMapping("/{id:[0-9]+}")
+    public ResponseEntity<ScheduleDto> getScheduleDetail(@PathVariable Integer id) {
+        ScheduleDto schedule = scheuleService.readScheduleById(id);
+
+        if (schedule == null) {
+            throw new CustomRestfullException("학사일정을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+        }
+
         return ResponseEntity.ok(schedule);
     }
 
-    @GetMapping("/list")
-    public ResponseEntity<Map<String, Object>> ScheduleList(@RequestParam(defaultValue = "select") String crud) {
-        List<Schedule> schedule = scheuleService.readSchedule();
-        Map<String, Object> body = new HashMap<>();
-        body.put("crud", crud);
-        body.put("schedule", schedule);
-        return ResponseEntity.ok(body);
-    }
+    // 학사일정 등록
+    @PostMapping("")
+    public ResponseEntity<Map<String, String>> createSchedule(
+            @RequestBody ScheduleFormDto scheduleFormDto,
+            Authentication authentication) {
 
-	
-	//일정 추가
-	
-    @PostMapping("/write")
-    public ResponseEntity<Map<String, String>> ScheduleProc(@RequestBody ScheduleFormDto scheduleFormDto) {
-        PrincipalDto principal = (PrincipalDto) session.getAttribute(Define.PRINCIPAL);
-        if (scheduleFormDto.getStartDay().equals("")){
-            throw new CustomRestfullException("날짜를 입력해주세요", HttpStatus.BAD_REQUEST);
-        }else if(scheduleFormDto.getEndDay().equals("")){
-            throw new CustomRestfullException("날짜를 입력해주세요", HttpStatus.BAD_REQUEST);
-        }else if(scheduleFormDto.getInformation().equals("")){
-            throw new CustomRestfullException("내용을 입력해주세요", HttpStatus.BAD_REQUEST);
-        }else {
-            scheuleService.createSchedule(principal.getId(), scheduleFormDto);
+        // 입력 검증
+        if (scheduleFormDto.getStartDay() == null || scheduleFormDto.getStartDay().isEmpty()) {
+            throw new CustomRestfullException("시작 날짜를 입력해주세요", HttpStatus.BAD_REQUEST);
         }
-        Map<String, String> body = new HashMap<>();
-        body.put("message", "일정이 등록되었습니다.");
-        return ResponseEntity.status(HttpStatus.CREATED).body(body);
+        if (scheduleFormDto.getEndDay() == null || scheduleFormDto.getEndDay().isEmpty()) {
+            throw new CustomRestfullException("종료 날짜를 입력해주세요", HttpStatus.BAD_REQUEST);
+        }
+        if (scheduleFormDto.getInformation() == null || scheduleFormDto.getInformation().isEmpty()) {
+            throw new CustomRestfullException("내용을 입력해주세요", HttpStatus.BAD_REQUEST);
+        }
+
+        // 인증된 사용자 ID 가져오기
+        String username = authentication.getName();
+        Integer staffId = Integer.parseInt(username);
+
+        scheuleService.createSchedule(staffId, scheduleFormDto);
+
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "일정이 등록되었습니다.");
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @GetMapping("/delete")
-    public ResponseEntity<Map<String, String>> deleteSchedule(@RequestParam Integer id) {
-        scheuleService.deleteSchedule(id);
-        Map<String, String> body = new HashMap<>();
-        body.put("message", "일정이 삭제되었습니다.");
-        return ResponseEntity.ok(body);
+    // 학사일정 수정
+    @PutMapping("/{id:[0-9]+}")
+    public ResponseEntity<Map<String, String>> updateSchedule(
+            @PathVariable Integer id,
+            @RequestBody ScheduleFormDto scheduleFormDto) {
+
+        scheduleFormDto.setId(id);
+        int result = scheuleService.updateSchedule(scheduleFormDto);
+
+        if (result == 0) {
+            throw new CustomRestfullException("학사일정 수정에 실패했습니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "일정이 수정되었습니다.");
+
+        return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/detail")
-    public ResponseEntity<Map<String, Object>> detailSchedule(@RequestParam Integer id,
-            @RequestParam(defaultValue = "read") String crud) {
-        ScheduleDto schedule = scheuleService.readScheduleById(id);
-        Map<String, Object> body = new HashMap<>();
-        body.put("crud", crud);
-        body.put("schedule", schedule);
-        return ResponseEntity.ok(body);
-    }
+    // 학사일정 삭제
+    @DeleteMapping("/{id:[0-9]+}")
+    public ResponseEntity<Map<String, String>> deleteSchedule(@PathVariable Integer id) {
+        int result = scheuleService.deleteSchedule(id);
 
-    @PostMapping("/update")
-    public ResponseEntity<Map<String, String>> updateSchedule(@RequestBody ScheduleFormDto scheduleFormDto) {
-        scheuleService.updateSchedule(scheduleFormDto);
-        Map<String, String> body = new HashMap<>();
-        body.put("message", "일정이 수정되었습니다.");
-        return ResponseEntity.ok(body);
-    }
+        if (result == 0) {
+            throw new CustomRestfullException("학사일정 삭제에 실패했습니다.", HttpStatus.BAD_REQUEST);
+        }
 
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "일정이 삭제되었습니다.");
+
+        return ResponseEntity.ok(response);
+    }
 }

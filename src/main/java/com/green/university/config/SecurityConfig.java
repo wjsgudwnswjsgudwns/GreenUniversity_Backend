@@ -27,7 +27,7 @@ import jakarta.servlet.http.HttpServletResponse;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    // ✅ JwtAuthenticationFilter만 주입받음 (순환 참조 방지)
+    // JwtAuthenticationFilter만 주입받음 (순환 참조 방지)
     private final JwtAuthenticationFilter authenticationFilter;
 
     @Bean
