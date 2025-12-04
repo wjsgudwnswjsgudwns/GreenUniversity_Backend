@@ -160,24 +160,18 @@ public class ProfessorService {
                 Sort.by(Sort.Direction.ASC, "id")
         );
 
-        // 동적 쿼리 생성
-        Specification<Professor> spec = (root, query, criteriaBuilder) -> {
-            List<Predicate> predicates = new ArrayList<>();
+        // 교수 ID로 검색
+        if (form.getProfessorId() != null) {
+            return professorJpaRepository.findByProfessorId(form.getProfessorId(), pageable);
+        }
 
-            // 교수 ID로 검색
-            if (form.getProfessorId() != null) {
-                predicates.add(criteriaBuilder.equal(root.get("id"), form.getProfessorId()));
-            }
+        // 학과 ID로 검색
+        if (form.getDeptId() != null) {
+            return professorJpaRepository.findByDeptId(form.getDeptId(), pageable);
+        }
 
-            // 학과 ID로 검색
-            if (form.getDeptId() != null) {
-                predicates.add(criteriaBuilder.equal(root.get("deptId"), form.getDeptId()));
-            }
-
-            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
-        };
-
-        return professorJpaRepository.findAll(spec, pageable);
+        // 조건 없으면 전체 조회
+        return professorJpaRepository.findAll(pageable);
     }
 
 	/**
