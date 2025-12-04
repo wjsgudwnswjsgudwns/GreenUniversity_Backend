@@ -1,20 +1,24 @@
 package com.green.university.controller;
 
 import java.io.File;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.RestController;
-// Model import removed because REST controllers return JSON instead of views
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.green.university.dto.NoticeFormDto;
@@ -25,164 +29,170 @@ import com.green.university.service.NoticeService;
 import com.green.university.utils.Define;
 
 /**
- * 
- * @author 박성희 
- * Notice Controller
- *
+ * @author 박성희
+ * Notice REST Controller
  */
-import java.util.HashMap;
-import java.util.Map;
-
-import org.springframework.http.ResponseEntity;
-
 @RestController
 @RequestMapping("/api/notice")
 public class NoticeController {
-	@Autowired
-	NoticeService noticeService;
 
-	/**
-	 * 
-	 * @return 공지사항 페이지
-	 */
-	@GetMapping("")
-    public ResponseEntity<Map<String, Object>> notice(@RequestParam(defaultValue = "select") String crud) {
-        NoticePageFormDto noticePageFormDto = new NoticePageFormDto();
-        noticePageFormDto.setPage(0);
-        List<Notice> noticeList = noticeService.readNotice(noticePageFormDto);
-        Integer amount = noticeService.readNoticeAmount(noticePageFormDto);
+    @Autowired
+    private NoticeService noticeService;
+
+    /**
+     * 공지사항 목록 조회 (페이징)
+     * GET /api/notice?page=0
+     */
+    @GetMapping("")
+    public ResponseEntity<Map<String, Object>> getNoticeList(
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String type) {
+
+        NoticePageFormDto dto = new NoticePageFormDto();
+        dto.setPage(page);
+        dto.setKeyword(keyword);
+        dto.setType(type);
+
+        Page<Notice> noticePage = noticeService.readNoticePage(dto);
+
         Map<String, Object> response = new HashMap<>();
-        response.put("crud", crud);
-        response.put("listCount", Math.ceil(amount / 10.0));
-        response.put("noticeList", noticeList.isEmpty() ? null : noticeList);
+        response.put("content", noticePage.getContent());
+        response.put("currentPage", noticePage.getNumber());
+        response.put("totalPages", noticePage.getTotalPages());
+        response.put("totalElements", noticePage.getTotalElements());
+        response.put("size", noticePage.getSize());
+        response.put("hasNext", noticePage.hasNext());
+        response.put("hasPrevious", noticePage.hasPrevious());
+
         return ResponseEntity.ok(response);
     }
 
-	/**
-	 * 
-	 * @return 공지사항 입력 기능
-	 */
-    @PostMapping("/write")
-    public ResponseEntity<?> insertNotice(@Validated NoticeFormDto noticeFormDto) {
+    /**
+     * 공지사항 상세 조회 (조회수 증가 없음)
+     * GET /api/notice/{id}
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<Notice> getNoticeDetail(@PathVariable Integer id) {
+        Notice notice = noticeService.readByIdNotice(id);
+
+        if (notice == null) {
+            throw new CustomRestfullException("공지사항을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+        }
+
+        // 줄바꿈 처리
+        if (notice.getContent() != null) {
+            notice.setContent(notice.getContent().replace("\r\n", "<br>"));
+        }
+
+        return ResponseEntity.ok(notice);
+    }
+
+    /**
+     * 조회수 증가 (별도 엔드포인트)
+     * POST /api/notice/{id}/views
+     */
+    @PostMapping("/{id}/views")
+    public ResponseEntity<Void> increaseViews(@PathVariable Integer id) {
+        noticeService.increaseViews(id);
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * 공지사항 등록
+     * POST /api/notice
+     */
+    @PostMapping("")
+    public ResponseEntity<Map<String, Object>> createNotice(@Validated NoticeFormDto noticeFormDto) {
         MultipartFile file = noticeFormDto.getFile();
+
+        // 파일 업로드 처리
         if (file != null && !file.isEmpty()) {
             if (file.getSize() > Define.MAX_FILE_SIZE) {
-                throw new CustomRestfullException("파일 크기는 20MB 이상 클 수 없습니다.", HttpStatus.BAD_REQUEST);
+                throw new CustomRestfullException("파일 크기는 20MB를 초과할 수 없습니다.", HttpStatus.BAD_REQUEST);
             }
+
             try {
                 String saveDirectory = Define.UPLOAD_DIRECTORY;
                 File dir = new File(saveDirectory);
                 if (!dir.exists()) {
                     dir.mkdirs();
                 }
+
                 UUID uuid = UUID.randomUUID();
                 String fileName = uuid + "_" + file.getOriginalFilename();
-                String uploadPath = Define.UPLOAD_DIRECTORY + File.separator + fileName;
+                String uploadPath = saveDirectory + File.separator + fileName;
                 File destination = new File(uploadPath);
                 file.transferTo(destination);
+
                 noticeFormDto.setOriginFilename(file.getOriginalFilename());
                 noticeFormDto.setUuidFilename(fileName);
             } catch (Exception e) {
-                e.printStackTrace();
+                throw new CustomRestfullException("파일 업로드 중 오류가 발생했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
             }
         }
-        noticeService.readNotice(noticeFormDto);
-        return ResponseEntity.status(HttpStatus.CREATED).build();
+
+        noticeService.createNotice(noticeFormDto);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "공지사항이 등록되었습니다.");
+        response.put("noticeId", noticeFormDto.getNoticeId());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-	/**
-	 * 
-	 * @return 공지사항 상세 조회 기능
-	 */
-    @GetMapping("/read")
-    public ResponseEntity<Notice> selectByIdNotice(@RequestParam Integer id) {
+    /**
+     * 공지사항 수정 페이지용 조회
+     * GET /api/notice/{id}/edit
+     */
+    @GetMapping("/{id}/edit")
+    public ResponseEntity<Notice> getNoticeForEdit(@PathVariable Integer id) {
         Notice notice = noticeService.readByIdNotice(id);
-        if (notice != null && notice.getContent() != null) {
-            notice.setContent(notice.getContent().replace("\r\n", "<br>"));
+
+        if (notice == null) {
+            throw new CustomRestfullException("공지사항을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
+
         return ResponseEntity.ok(notice);
     }
 
-	/**
-	 * 공지사항 페이지 이동
-	 */
-    @GetMapping("/list/{page}")
-    public ResponseEntity<Map<String, Object>> showNoticeListByPage(
-            @RequestParam(defaultValue = "select") String crud,
-            @PathVariable Integer page) {
-        NoticePageFormDto noticePageFormDto = new NoticePageFormDto();
-        noticePageFormDto.setPage((page - 1) * 10);
-        Integer amount = noticeService.readNoticeAmount(noticePageFormDto);
-        List<Notice> noticeList = noticeService.readNotice(noticePageFormDto);
-        Map<String, Object> response = new HashMap<>();
-        response.put("crud", crud);
-        response.put("listCount", Math.ceil(amount / 10.0));
-        response.put("noticeList", noticeList.isEmpty() ? null : noticeList);
+    /**
+     * 공지사항 수정
+     * PUT /api/notice/{id}
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<Map<String, String>> updateNotice(
+            @PathVariable Integer id,
+            @RequestBody @Validated NoticeFormDto noticeFormDto) {
+
+        noticeFormDto.setId(id);
+        int result = noticeService.updateNotice(noticeFormDto);
+
+        if (result == 0) {
+            throw new CustomRestfullException("공지사항 수정에 실패했습니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "공지사항이 수정되었습니다.");
+
         return ResponseEntity.ok(response);
     }
 
-	/**
-	 * 공지사항 검색 기능
-	 */
-    @GetMapping("/search")
-    public ResponseEntity<Map<String, Object>> showNoticeByKeyword(NoticePageFormDto noticePageFormDto) {
-        noticePageFormDto.setPage(0);
-        List<Notice> noticeList = noticeService.readNoticeByKeyword(noticePageFormDto);
-        Integer amount = noticeService.readNoticeAmount(noticePageFormDto);
-        Map<String, Object> response = new HashMap<>();
-        response.put("keyword", noticePageFormDto.getKeyword());
-        response.put("crud", "selectKeyword");
-        response.put("listCount", Math.ceil(amount / 10.0));
-        response.put("noticeList", noticeList.isEmpty() ? null : noticeList);
+    /**
+     * 공지사항 삭제
+     * DELETE /api/notice/{id}
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, String>> deleteNotice(@PathVariable Integer id) {
+        int result = noticeService.deleteNotice(id);
+
+        if (result == 0) {
+            throw new CustomRestfullException("공지사항 삭제에 실패했습니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "공지사항이 삭제되었습니다.");
+
         return ResponseEntity.ok(response);
-    }
-
-	/**
-	 * 공지사항 검색 기능 (키워드 검색 페이징 처리)
-	 */
-    @GetMapping("/search/{page}")
-    public ResponseEntity<Map<String, Object>> showNoticeByKeywordAndPage(
-            NoticePageFormDto noticePageFormDto,
-            @PathVariable Integer page,
-            @RequestParam String keyword) {
-        noticePageFormDto.setPage((page - 1) * 10);
-        List<Notice> noticeList = noticeService.readNoticeByKeyword(noticePageFormDto);
-        Integer amount = noticeService.readNoticeAmount(noticePageFormDto);
-        Map<String, Object> response = new HashMap<>();
-        response.put("keyword", noticePageFormDto.getKeyword());
-        response.put("crud", "selectKeyword");
-        response.put("listCount", Math.ceil(amount / 10.0));
-        response.put("noticeList", noticeList.isEmpty() ? null : noticeList);
-        return ResponseEntity.ok(response);
-    }
-
-	/**
-	 * 
-	 * @return 공지사항 수정 페이지
-	 */
-    @GetMapping("/update")
-    public ResponseEntity<Notice> update(@RequestParam Integer id) {
-        Notice notice = noticeService.readByIdNotice(id);
-        return ResponseEntity.ok(notice);
-    }
-
-	/**
-	 * 
-	 * @return 공지사항 수정 기능
-	 */
-    @PutMapping("/update")
-    public ResponseEntity<?> update(@Validated NoticeFormDto noticeFormDto) {
-        noticeService.updateNotice(noticeFormDto);
-        return ResponseEntity.ok().build();
-    }
-
-	/**
-	 * 
-	 * @return 공지사항 삭제 조회 기능
-	 */
-    @GetMapping("/delete")
-    public ResponseEntity<?> delete(@RequestParam Integer id) {
-        noticeService.deleteNotice(id);
-        return ResponseEntity.ok().build();
     }
 }

@@ -1,12 +1,19 @@
 package com.green.university.service;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import com.green.university.repository.*;
 import com.green.university.repository.model.*;
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -145,20 +152,26 @@ public class ProfessorService {
 	 * @return 교수 리스트 조회
 	 */
     @Transactional(readOnly = true)
-    public List<Professor> readProfessorList(ProfessorListForm professorListForm) {
-        List<Professor> list = null;
+    public Page<Professor> readProfessorList(ProfessorListForm form) {
+        // 페이지 번호는 0-based, 한 페이지당 20개
+        Pageable pageable = PageRequest.of(
+                form.getPage(),
+                20,
+                Sort.by(Sort.Direction.ASC, "id")
+        );
 
-        if (professorListForm.getProfessorId() != null) {
-            list = professorJpaRepository.findById(professorListForm.getProfessorId())
-                    .map(Collections::singletonList)
-                    .orElse(Collections.emptyList());
-        } else if (professorListForm.getDeptId() != null) {
-            list = professorJpaRepository.findByDepartment_Id(professorListForm.getDeptId());
-        } else {
-            list = professorJpaRepository.findAll();
+        // 교수 ID로 검색
+        if (form.getProfessorId() != null) {
+            return professorJpaRepository.findByProfessorId(form.getProfessorId(), pageable);
         }
 
-        return list;
+        // 학과 ID로 검색
+        if (form.getDeptId() != null) {
+            return professorJpaRepository.findByDeptId(form.getDeptId(), pageable);
+        }
+
+        // 조건 없으면 전체 조회
+        return professorJpaRepository.findAll(pageable);
     }
 
 	/**
