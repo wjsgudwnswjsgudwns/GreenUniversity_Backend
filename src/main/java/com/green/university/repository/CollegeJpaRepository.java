@@ -1,10 +1,15 @@
 package com.green.university.repository;
 
+import com.green.university.repository.model.Professor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.green.university.repository.model.College;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import java.util.List;
 
 /**
  * JPA repository for {@link College} entities.
@@ -25,5 +30,7 @@ public interface CollegeJpaRepository extends JpaRepository<College, Integer> {
 
     // 아이디로 삭제
     // JpaRepository의 deleteById() 메서드 사용
+
+    List<College> findAllByOrderByIdAsc();
 
 }

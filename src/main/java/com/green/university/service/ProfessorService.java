@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.green.university.dto.response.*;
 import com.green.university.repository.*;
 import com.green.university.repository.model.*;
 import jakarta.persistence.criteria.Predicate;
@@ -21,10 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.green.university.dto.ProfessorListForm;
 import com.green.university.dto.SyllaBusFormDto;
 import com.green.university.dto.UpdateStudentGradeDto;
-import com.green.university.dto.response.ReadSyllabusDto;
-import com.green.university.dto.response.StudentInfoForProfessorDto;
-import com.green.university.dto.response.SubjectForProfessorDto;
-import com.green.university.dto.response.SubjectPeriodForProfessorDto;
 import com.green.university.handler.exception.CustomRestfullException;
 
 
@@ -122,11 +119,53 @@ public class ProfessorService {
         stuSubJpaRepository.save(stuSub);
     }
 
-	// 강의계획서 조회
+    // 강의계획서 조회
     @Transactional(readOnly = true)
-    public SyllaBus readSyllabus(Integer subjectId) {
-        return syllaBusJpaRepository.findById(subjectId)
+    public SyllabusResponseDto readSyllabus(Integer subjectId) {
+
+        SyllaBus sb = syllaBusJpaRepository.findById(subjectId)
                 .orElseThrow(() -> new CustomRestfullException("강의계획서를 찾을 수 없습니다", HttpStatus.NOT_FOUND));
+
+        Subject s = sb.getSubject();
+        Professor p = s.getProfessor();
+        Department d = p.getDepartment();
+
+        SyllabusResponseDto dto = new SyllabusResponseDto();
+
+        // 기본 정보
+        dto.setSubjectId(s.getId());
+        dto.setSubjectName(s.getName());
+        dto.setProfessorName(p.getName());
+
+        // 수업 시간 포맷
+        String classTime = String.format(
+                "%s %02d:00 ~ %02d:00",
+                s.getSubDay(),
+                s.getStartTime(),
+                s.getEndTime()
+        );
+        dto.setClassTime(classTime);
+
+        dto.setRoomId(s.getRoom().getId());
+
+        // 학사 정보
+        dto.setSubYear(s.getSubYear());
+        dto.setSemester(s.getSemester());
+        dto.setGrades(s.getGrades());
+        dto.setType(s.getType());
+
+        // 교수 정보
+        dto.setDeptName(d.getName());
+        dto.setTel(p.getTel());
+        dto.setEmail(p.getEmail());
+
+        // 강의계획서 상세
+        dto.setOverview(sb.getOverview());
+        dto.setObjective(sb.getObjective());
+        dto.setTextbook(sb.getTextbook());
+        dto.setProgram(sb.getProgram());
+
+        return dto;
     }
 
 	/**

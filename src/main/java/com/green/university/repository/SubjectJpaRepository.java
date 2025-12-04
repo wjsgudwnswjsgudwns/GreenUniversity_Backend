@@ -1,5 +1,6 @@
 package com.green.university.repository;
 
+import com.green.university.repository.model.College;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.green.university.repository.model.Subject;
@@ -27,4 +28,6 @@ public interface SubjectJpaRepository extends JpaRepository<Subject, Integer> {
 
     @Query("SELECT s FROM Subject s WHERE s.capacity < s.numOfStudent")
     List<Subject> findByCapacityLessThanNumOfStudent();
+
+    List<Subject> findAllByOrderByIdAsc();
 }
