@@ -3,7 +3,7 @@ package com.green.university.repository.model;
 import lombok.Getter;
 import lombok.Setter;
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "stu_sub_detail_tb")

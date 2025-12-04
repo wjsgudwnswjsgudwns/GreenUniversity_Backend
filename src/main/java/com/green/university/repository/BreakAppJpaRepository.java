@@ -1,7 +1,7 @@
 package com.green.university.repository;
 
 import com.green.university.dto.BreakAppFormDto;
-import org.apache.ibatis.annotations.Param;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.green.university.repository.model.BreakApp;

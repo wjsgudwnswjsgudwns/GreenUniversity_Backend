@@ -49,7 +49,9 @@ public class StudentService {
         }
 
         // If page is provided, perform simple pagination (20 per page)
-        int page = studentListForm.getPage() != null ? studentListForm.getPage() : 1;
+        Integer rawPage = studentListForm.getPage();
+        int page = (rawPage == null || rawPage < 1) ? 1 : rawPage;
+
         int pageSize = 20;
         int fromIndex = (page - 1) * pageSize;
         int toIndex = Math.min(fromIndex + pageSize, all.size());

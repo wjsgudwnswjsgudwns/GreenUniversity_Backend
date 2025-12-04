@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -41,6 +42,22 @@ public class WebMvcConfig implements WebMvcConfigurer {
 		registry.addInterceptor(authIntercepterForStudent).addPathPatterns(Define.STUDENT_PATHS);
 		registry.addInterceptor(authIntercepterForLogin).addPathPatterns("/login");
 		registry.addInterceptor(authIntercepterForMainPage).addPathPatterns("/");
+
+        registry.addInterceptor(authIntercepter)
+                .addPathPatterns(Define.PATHS)
+                .excludePathPatterns("/api/meetings/**"); // ★ 임시 제외
+
+        registry.addInterceptor(authIntercepterForProfessor)
+                .addPathPatterns(Define.PROFESSOR_PATHS)
+                .excludePathPatterns("/api/meetings/**");
+
+        registry.addInterceptor(authIntercepterForStaff)
+                .addPathPatterns(Define.STAFF_PATHS)
+                .excludePathPatterns("/api/meetings/**");
+
+        registry.addInterceptor(authIntercepterForStudent)
+                .addPathPatterns(Define.STUDENT_PATHS)
+                .excludePathPatterns("/api/meetings/**");
 	}
 
 	// 파일 리소스 등록
@@ -56,4 +73,16 @@ public class WebMvcConfig implements WebMvcConfigurer {
 		return new BCryptPasswordEncoder();
 	}
 
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/**")
+                // HTML 띄우는 주소 (둘 다 열어두면 편함)
+                .allowedOrigins("http://127.0.0.1:5500", "http://localhost:5500")
+                // 허용 메서드
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                // 헤더
+                .allowedHeaders("*")
+                // 쿠키/인증정보 허용
+                .allowCredentials(true);
+    }
 }

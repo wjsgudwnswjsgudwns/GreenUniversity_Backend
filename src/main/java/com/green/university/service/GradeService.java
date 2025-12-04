@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.green.university.dto.response.GradeDto;
 import com.green.university.dto.response.GradeForScholarshipDto;
 import com.green.university.dto.response.MyGradeDto;
-import com.green.university.repository.interfaces.GradeRespository;
+
 import com.green.university.utils.Define;
 
 @Service

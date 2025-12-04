@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpSession;
 
 import com.green.university.repository.SubjectJpaRepository;
 import com.green.university.repository.model.*;
@@ -76,34 +76,34 @@ public class StuSubController {
 	public static int SUGANG_PERIOD = 0;
 
     // 예비 수강신청 기간에서 수강신청 기간으로 변경하는 페이지 (교직원용)
-    @GetMapping("/period")
-    public ResponseEntity<?> updatePeriod() {
-        Map<String, Object> body = new HashMap<>();
-        body.put("period", SUGANG_PERIOD);
-        body.put("message", "예비 수강신청 기간 설정 페이지입니다.");
-        return ResponseEntity.ok(body);
-    }
+//    @GetMapping("/period")
+//    public ResponseEntity<?> updatePeriod() {
+//        Map<String, Object> body = new HashMap<>();
+//        body.put("period", SUGANG_PERIOD);
+//        body.put("message", "예비 수강신청 기간 설정 페이지입니다.");
+//        return ResponseEntity.ok(body);
+//    }
 
 	// 예비 수강 신청 기간 -> 수강 신청 기간
-    @GetMapping("/updatePeriod1")
-    public ResponseEntity<?> updatePeriodProc1() {
-        SUGANG_PERIOD = 1;
-        stuSubService.createStuSubByPreStuSub();
-        Map<String, Object> body = new HashMap<>();
-        body.put("period", SUGANG_PERIOD);
-        body.put("message", "수강신청 기간으로 변경되었습니다.");
-        return ResponseEntity.ok(body);
-    }
+//    @GetMapping("/updatePeriod1")
+//    public ResponseEntity<?> updatePeriodProc1() {
+//        SUGANG_PERIOD = 1;
+//        stuSubService.createStuSubByPreStuSub();
+//        Map<String, Object> body = new HashMap<>();
+//        body.put("period", SUGANG_PERIOD);
+//        body.put("message", "수강신청 기간으로 변경되었습니다.");
+//        return ResponseEntity.ok(body);
+//    }
 
 	// 수강 신청 기간 -> 종료
-    @GetMapping("/updatePeriod2")
-    public ResponseEntity<?> updatePeriodProc2() {
-        SUGANG_PERIOD = 2;
-        Map<String, Object> body = new HashMap<>();
-        body.put("period", SUGANG_PERIOD);
-        body.put("message", "수강신청 기간이 종료되었습니다.");
-        return ResponseEntity.ok(body);
-    }
+//    @GetMapping("/updatePeriod2")
+//    public ResponseEntity<?> updatePeriodProc2() {
+//        SUGANG_PERIOD = 2;
+//        Map<String, Object> body = new HashMap<>();
+//        body.put("period", SUGANG_PERIOD);
+//        body.put("message", "수강신청 기간이 종료되었습니다.");
+//        return ResponseEntity.ok(body);
+//    }
 
     // 과목 조회 (현재 학기)
     @GetMapping("/subjectList/{page}")

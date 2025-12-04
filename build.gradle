@@ -1,50 +1,63 @@
 plugins {
-	id 'java'
-	id 'org.springframework.boot' version '2.7.11'
-	id 'io.spring.dependency-management' version '1.0.15.RELEASE'
+    id 'java'
+    id 'org.springframework.boot' version '3.5.7'
+    id 'io.spring.dependency-management' version '1.1.7'
 }
 
 group = 'com.green'
 version = '0.0.1-SNAPSHOT'
-sourceCompatibility = '11'
+sourceCompatibility = '17'  // ✅ Java 17로 변경
 
 configurations {
-	compileOnly {
-		extendsFrom annotationProcessor
-	}
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
 }
 
 repositories {
-	mavenCentral()
+    mavenCentral()
 }
 
 dependencies {
     // Validation support for DTOs and request parameters
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    // Provide JSP engine for any remaining legacy views. These can be removed once the migration to React is complete.
-    implementation 'org.apache.tomcat.embed:tomcat-embed-jasper'
-    implementation 'javax.servlet:jstl'
-    // Switch from MyBatis to Spring Data JPA. This brings in Hibernate and other JPA infrastructure.
+
+    // ✅ Jakarta EE로 변경 (javax → jakarta)
+    implementation 'org.glassfish.web:jakarta.servlet.jsp.jstl:3.0.1'
+    implementation 'jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api:3.0.0'
+
+    // Switch from MyBatis to Spring Data JPA
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    // Retain MyBatis for portions of the codebase that have not yet been migrated to JPA.  
-    implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:2.3.0'
-    // MySQL driver for connecting to the production database
+
+//    // ✅ MyBatis Spring Boot 3.x 호환 버전
+//    implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3'
+
+    // MySQL driver
     runtimeOnly 'com.mysql:mysql-connector-j'
-    // Cryptographic utilities used across the application (e.g. for password hashing)
+
+    // Spring Security (crypto 포함)
+   // implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.security:spring-security-crypto'
-    // Web starter provides Spring MVC and Jackson for REST APIs
+    // Web starter
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    // Lombok for reducing boilerplate code on Java classes
+
+    // Lombok
     compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
     // Hot reload in development
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
-    // Annotation processor for Lombok during compilation
-    annotationProcessor 'org.projectlombok:lombok'
+
+    // ✅ JWT 최신 버전
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.5'
+
     // Testing dependencies
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-
+    testImplementation 'org.springframework.security:spring-security-test'
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+    useJUnitPlatform()
 }

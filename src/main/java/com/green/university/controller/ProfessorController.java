@@ -2,7 +2,7 @@ package com.green.university.controller;
 
 import java.util.List;
 
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpSession;
 
 import com.green.university.repository.model.StuSub;
 import com.green.university.repository.model.SyllaBus;
