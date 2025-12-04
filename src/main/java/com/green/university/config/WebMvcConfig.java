@@ -42,6 +42,22 @@ public class WebMvcConfig implements WebMvcConfigurer {
 		registry.addInterceptor(authIntercepterForStudent).addPathPatterns(Define.STUDENT_PATHS);
 		registry.addInterceptor(authIntercepterForLogin).addPathPatterns("/login");
 		registry.addInterceptor(authIntercepterForMainPage).addPathPatterns("/");
+
+        registry.addInterceptor(authIntercepter)
+                .addPathPatterns(Define.PATHS)
+                .excludePathPatterns("/api/meetings/**"); // ★ 임시 제외
+
+        registry.addInterceptor(authIntercepterForProfessor)
+                .addPathPatterns(Define.PROFESSOR_PATHS)
+                .excludePathPatterns("/api/meetings/**");
+
+        registry.addInterceptor(authIntercepterForStaff)
+                .addPathPatterns(Define.STAFF_PATHS)
+                .excludePathPatterns("/api/meetings/**");
+
+        registry.addInterceptor(authIntercepterForStudent)
+                .addPathPatterns(Define.STUDENT_PATHS)
+                .excludePathPatterns("/api/meetings/**");
 	}
 
 	// 파일 리소스 등록

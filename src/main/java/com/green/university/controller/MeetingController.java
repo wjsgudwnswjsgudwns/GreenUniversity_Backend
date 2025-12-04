@@ -38,8 +38,17 @@ public class MeetingController {
      */
     private PrincipalDto getPrincipal() {
         PrincipalDto principal = (PrincipalDto) session.getAttribute(Define.PRINCIPAL);
+//        if (principal == null) {
+//            throw new CustomRestfullException("로그인이 필요합니다.", HttpStatus.UNAUTHORIZED);
+//        }
+
         if (principal == null) {
-            throw new CustomRestfullException("로그인이 필요합니다.", HttpStatus.UNAUTHORIZED);
+            // ★ 임시 테스트용 가짜 Principal
+            principal = new PrincipalDto();
+            principal.setId(1);              // 실제 존재하는 유저 id로
+            principal.setUserRole("student");
+            principal.setName("테스트유저");
+            principal.setEmail("test@example.com");
         }
         return principal;
     }
