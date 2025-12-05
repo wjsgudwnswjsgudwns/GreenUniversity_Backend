@@ -2,14 +2,8 @@ package com.green.university.repository.model;
 
 import java.sql.Timestamp;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
-import jakarta.persistence.Id;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import com.green.university.enums.MeetingStatus;
+import jakarta.persistence.*;
 
 import lombok.Data;
 
@@ -73,8 +67,9 @@ public class Meeting {
      * - 'FINISHED'    : 종료
      * - 'CANCELED'    : 취소
      */
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    private String status;
+    private MeetingStatus status;
 
     /**
      * Janus videoroom에서 사용할 방 번호.
@@ -94,4 +89,13 @@ public class Meeting {
      */
     @Column(name = "updated_at")
     private Timestamp updatedAt;
+
+    /**
+     * 회의방에 아무도 남지 않은 마지막 시각
+     * - 마지막 참가자가 나갈 때 찍고
+     * - 누군가 다시 들어오면 null로 초기화
+     * - 이 값 + 30분 넘으면 자동 FINISHED 처리
+     */
+    @Column(name = "last_empty_at")
+    private Timestamp lastEmptyAt;
 }

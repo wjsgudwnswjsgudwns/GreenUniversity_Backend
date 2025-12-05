@@ -50,12 +50,22 @@ public class PersonalController {
             throw new CustomRestfullException("로그인이 필요합니다.", HttpStatus.UNAUTHORIZED);
         }
 
-        String username = authentication.getName();
-        // username은 사용자 ID(숫자)로 저장했다고 가정
-        Integer userId = Integer.parseInt(username);
+        Object principalObj = authentication.getPrincipal();
 
-        // DB에서 사용자 정보 조회 (캐싱 고려 가능)
-        return userService.readPrincipalById(userId);
+        if (principalObj instanceof PrincipalDto) {
+            return (PrincipalDto) principalObj;
+        }
+
+        if (principalObj instanceof String username) {
+            try {
+                Integer userId = Integer.parseInt(username);
+                return userService.readPrincipalById(userId);
+            } catch (NumberFormatException e) {
+                throw new CustomRestfullException("유효하지 않은 사용자 정보입니다.", HttpStatus.UNAUTHORIZED);
+            }
+        }
+
+        throw new CustomRestfullException("유효하지 않은 인증 정보입니다.", HttpStatus.UNAUTHORIZED);
     }
 
     /**

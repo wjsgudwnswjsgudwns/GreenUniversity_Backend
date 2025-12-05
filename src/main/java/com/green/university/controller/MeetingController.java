@@ -6,12 +6,14 @@ import java.util.Map;
 
 import com.green.university.dto.CreateMeetingReqDto;
 import com.green.university.dto.response.MeetingJoinInfoResDto;
+import com.green.university.dto.response.MeetingPingResDto;
 import com.green.university.dto.response.MeetingSimpleResDto;
 import jakarta.servlet.http.HttpSession;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 
@@ -27,32 +29,11 @@ import com.green.university.utils.Define;
 @RequestMapping("/api/meetings")
 public class MeetingController {
 
-    @Autowired
-    private HttpSession session;
+
 
     @Autowired
     private MeetingService meetingService;
 
-    /**
-     * 세션에서 로그인 사용자 정보(PrincipalDto)를 가져온다.
-     */
-    private PrincipalDto getPrincipal() {
-        PrincipalDto principal = (PrincipalDto) session.getAttribute(Define.PRINCIPAL);
-//        if (principal == null) {
-//            throw new CustomRestfullException("로그인이 필요합니다.", HttpStatus.UNAUTHORIZED);
-//        }
-
-        if (principal == null) {
-            // ★ 임시 테스트용 가짜 Principal
-            principal = new PrincipalDto();
-           // principal.setId(1);              // 실제 존재하는 유저 id로
-            principal.setUserRole("student");
-            principal.setName("테스트유저");
-            principal.setEmail("test@example.com");
-            principal.setId(2023000001);
-        }
-        return principal;
-    }
 
     /**
      * [POST] /api/meetings/instant
@@ -60,8 +41,12 @@ public class MeetingController {
      * - 로그인된 사용자를 host로 하는 INSTANT 회의를 만든다.
      */
     @PostMapping("/instant")
-    public ResponseEntity<MeetingSimpleResDto> createInstantMeeting() {
-        PrincipalDto principal = getPrincipal();
+    public ResponseEntity<MeetingSimpleResDto> createInstantMeeting(@AuthenticationPrincipal PrincipalDto principal) {
+
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
         MeetingSimpleResDto dto = meetingService.createInstantMeeting(principal);
         return ResponseEntity.ok(dto);
     }
@@ -72,8 +57,11 @@ public class MeetingController {
      * - 요청 바디에 제목, 설명, 시작/종료 시간을 담아 전송.
      */
     @PostMapping("")
-    public ResponseEntity<MeetingSimpleResDto> createScheduledMeeting(@RequestBody CreateMeetingReqDto reqDto) {
-        PrincipalDto principal = getPrincipal();
+    public ResponseEntity<MeetingSimpleResDto> createScheduledMeeting( @AuthenticationPrincipal PrincipalDto principal,
+                                                                       @RequestBody CreateMeetingReqDto reqDto) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         MeetingSimpleResDto dto = meetingService.createScheduledMeeting(reqDto, principal);
         return ResponseEntity.ok(dto);
     }
@@ -83,8 +71,10 @@ public class MeetingController {
      * 내가 주최한 회의 목록 조회.
      */
     @GetMapping("")
-    public ResponseEntity<List<MeetingSimpleResDto>> readMyMeetings() {
-        PrincipalDto principal = getPrincipal();
+    public ResponseEntity<List<MeetingSimpleResDto>> readMyMeetings( @AuthenticationPrincipal PrincipalDto principal) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         List<MeetingSimpleResDto> list = meetingService.readMyMeetings(principal);
         return ResponseEntity.ok(list);
     }
@@ -94,8 +84,11 @@ public class MeetingController {
      * 회의 취소 (주최자만 가능).
      */
     @DeleteMapping("/{meetingId}")
-    public ResponseEntity<Map<String, String>> cancelMeeting(@PathVariable Integer meetingId) {
-        PrincipalDto principal = getPrincipal();
+    public ResponseEntity<Map<String, String>> cancelMeeting( @PathVariable Integer meetingId,
+                                                              @AuthenticationPrincipal PrincipalDto principal) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         meetingService.cancelMeeting(meetingId, principal);
 
         Map<String, String> body = new HashMap<>();
@@ -110,9 +103,70 @@ public class MeetingController {
      * - roomNumber, displayName, 시간/상태 등을 반환.
      */
     @GetMapping("/{meetingId}/join-info")
-    public ResponseEntity<MeetingJoinInfoResDto> readJoinInfo(@PathVariable Integer meetingId) {
-        PrincipalDto principal = getPrincipal();
+    public ResponseEntity<MeetingJoinInfoResDto> readJoinInfo(@PathVariable Integer meetingId,
+                                                              @AuthenticationPrincipal PrincipalDto principal) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         MeetingJoinInfoResDto dto = meetingService.readJoinInfo(meetingId, principal);
         return ResponseEntity.ok(dto);
     }
+
+    /**
+     * [POST] /api/meetings/{meetingId}/participants/join
+     * 회의 참가 API (참가자 목록에 나 자신 기록)
+     */
+    @PostMapping("/{meetingId}/participants/join")
+    public ResponseEntity<Map<String, String>> joinMeeting(
+            @PathVariable Integer meetingId,
+            @AuthenticationPrincipal PrincipalDto principal
+    ) {
+        if (principal == null) {
+            // 로그인 안됐을때
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String sessionKey = meetingService.joinMeeting(meetingId, principal);
+
+        meetingService.joinMeeting(meetingId, principal);
+
+        Map<String, String> body = new HashMap<>();
+        body.put("message", "회의에 참가했습니다.");
+        body.put("sessionKey", sessionKey);
+
+        return ResponseEntity.ok(body);
+    }
+
+    @PostMapping("/{meetingId}/participants/leave")
+    public ResponseEntity<Map<String, String>> leaveMeeting(
+            @PathVariable Integer meetingId,
+            @AuthenticationPrincipal PrincipalDto principal
+    ) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        meetingService.leaveMeeting(meetingId, principal);
+
+        Map<String, String> body = new HashMap<>();
+        body.put("message", "회의에서 나갔습니다.");
+        return ResponseEntity.ok(body);
+    }
+
+    @PostMapping("/{meetingId}/participants/ping")
+    public ResponseEntity<MeetingPingResDto> ping(
+            @PathVariable Integer meetingId,
+            @AuthenticationPrincipal PrincipalDto principal,
+            @RequestBody Map<String, String> body
+    ) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String clientSessionKey = body.get("sessionKey"); // 프론트에서 보낸 세션 키
+
+        MeetingPingResDto dto =
+                meetingService.ping(meetingId, principal, clientSessionKey);
+
+        return ResponseEntity.ok(dto);
+    }
+
 }

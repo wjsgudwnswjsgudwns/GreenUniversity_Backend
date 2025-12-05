@@ -29,11 +29,12 @@ public class SecurityConfig {
 
     // JwtAuthenticationFilter만 주입받음 (순환 참조 방지)
     private final JwtAuthenticationFilter authenticationFilter;
+    private final PasswordEncoder passwordEncoder;
 
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+//    @Bean
+//    public PasswordEncoder passwordEncoder() {
+//        return new BCryptPasswordEncoder();
+//    }
 
     @Bean
     public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration(

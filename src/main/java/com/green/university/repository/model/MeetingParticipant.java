@@ -65,6 +65,20 @@ public class MeetingParticipant {
     private String status;
 
     /**
+     * 이 사용자의 "현재 유효 브라우저/탭 세션"을 식별하는 키.
+     * 같은 유저가 새 브라우저에서 다시 접속하면 이 값이 덮어써진다.
+     */
+    @Column(name = "session_key", length = 100)
+    private String sessionKey;
+
+    /**
+     * 마지막으로 ping(heartbeat)을 보낸 시각.
+     * 접속 중인지 판단하고, 유령 세션을 정리할 때 사용한다.
+     */
+    @Column(name = "last_active_at")
+    private Timestamp lastActiveAt;
+
+    /**
      * 실제 회의에 입장한 시각.
      */
     @Column(name = "joined_at")

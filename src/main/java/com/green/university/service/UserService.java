@@ -1,6 +1,7 @@
 package com.green.university.service;
 
 import java.util.List;
+import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
 import com.green.university.dto.response.*;
@@ -535,11 +536,13 @@ public class UserService {
      * User 엔티티를 PrincipalDto로 변환
      * 역할에 따라 이름을 조회하여 설정
      */
-    private PrincipalDto convertToPrincipalDto(User user) {
+    public PrincipalDto convertToPrincipalDto(User user) {
         String name = getNameByUserRole(user.getId(), user.getUserRole());
+        String email = getEmailByUser(user);
 
         return PrincipalDto.builder()
                 .id(user.getId())
+                .email(email)
                 .password(user.getPassword())
                 .userRole(user.getUserRole())
                 .name(name)
@@ -565,7 +568,34 @@ public class UserService {
         }
         return null;
     }
+    /**
+     * 유저 엔티티로 이메일 조회
+     */
+    private String getEmailByUser(User user) {
+        Integer userId = user.getId();
+        String userRole = user.getUserRole();
 
+        if ("student".equals(userRole)) {
+            return studentJpaRepository.findById(userId)
+                    .map(Student::getEmail)
+                    .orElse(null);
+        } else if ("professor".equals(userRole)) {
+            return professorJpaRepository.findById(userId)
+                    .map(com.green.university.repository.model.Professor::getEmail)
+                    .orElse(null);
+        } else if ("staff".equals(userRole)) {
+            return staffJpaRepository.findById(userId)
+                    .map(Staff::getEmail)
+                    .orElse(null);
+        }
+        return null;
+    }
+    @Transactional(readOnly = true)
+    public User readUserById(Integer userId) {
+        return userJpaRepository.findById(userId)
+                .orElseThrow(() -> new CustomRestfullException(
+                        "사용자 정보를 찾을 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR));
+    }
 
 
 }
