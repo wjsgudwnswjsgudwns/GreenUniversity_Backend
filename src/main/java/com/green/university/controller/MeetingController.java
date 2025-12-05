@@ -6,6 +6,7 @@ import java.util.Map;
 
 import com.green.university.dto.CreateMeetingReqDto;
 import com.green.university.dto.response.MeetingJoinInfoResDto;
+import com.green.university.dto.response.MeetingPingResDto;
 import com.green.university.dto.response.MeetingSimpleResDto;
 import jakarta.servlet.http.HttpSession;
 
@@ -110,4 +111,62 @@ public class MeetingController {
         MeetingJoinInfoResDto dto = meetingService.readJoinInfo(meetingId, principal);
         return ResponseEntity.ok(dto);
     }
+
+    /**
+     * [POST] /api/meetings/{meetingId}/participants/join
+     * 회의 참가 API (참가자 목록에 나 자신 기록)
+     */
+    @PostMapping("/{meetingId}/participants/join")
+    public ResponseEntity<Map<String, String>> joinMeeting(
+            @PathVariable Integer meetingId,
+            @AuthenticationPrincipal PrincipalDto principal
+    ) {
+        if (principal == null) {
+            // 로그인 안됐을때
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String sessionKey = meetingService.joinMeeting(meetingId, principal);
+
+        meetingService.joinMeeting(meetingId, principal);
+
+        Map<String, String> body = new HashMap<>();
+        body.put("message", "회의에 참가했습니다.");
+        body.put("sessionKey", sessionKey);
+
+        return ResponseEntity.ok(body);
+    }
+
+    @PostMapping("/{meetingId}/participants/leave")
+    public ResponseEntity<Map<String, String>> leaveMeeting(
+            @PathVariable Integer meetingId,
+            @AuthenticationPrincipal PrincipalDto principal
+    ) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        meetingService.leaveMeeting(meetingId, principal);
+
+        Map<String, String> body = new HashMap<>();
+        body.put("message", "회의에서 나갔습니다.");
+        return ResponseEntity.ok(body);
+    }
+
+    @PostMapping("/{meetingId}/participants/ping")
+    public ResponseEntity<MeetingPingResDto> ping(
+            @PathVariable Integer meetingId,
+            @AuthenticationPrincipal PrincipalDto principal,
+            @RequestBody Map<String, String> body
+    ) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        String clientSessionKey = body.get("sessionKey"); // 프론트에서 보낸 세션 키
+
+        MeetingPingResDto dto =
+                meetingService.ping(meetingId, principal, clientSessionKey);
+
+        return ResponseEntity.ok(dto);
+    }
+
 }
