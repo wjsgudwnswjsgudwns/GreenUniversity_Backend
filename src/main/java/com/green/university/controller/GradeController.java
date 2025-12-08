@@ -17,18 +17,10 @@ import com.green.university.dto.response.PrincipalDto;
 import com.green.university.service.GradeService;
 import com.green.university.utils.Define;
 
-/**
- * 
- * @author 편용림
- * 
- *         금학기,학기별 성적, 누계성적 조회
- * 
- */
+// 금학기,학기별 성적, 누계성적 조회
 
-/**
- * 성적 관련 REST API 컨트롤러입니다. 금학기 성적 조회, 학기별 성적 조회, 총 누계 성적
- * 조회 기능을 JSON 응답으로 제공합니다.
- */
+// 성적 관련 REST API 컨트롤러입니다. 금학기 성적 조회, 학기별 성적 조회, 총 누계 성적
+// 조회 기능을 JSON 응답으로 제공합니다.
 @RestController
 @RequestMapping("/api/grade")
 public class GradeController {

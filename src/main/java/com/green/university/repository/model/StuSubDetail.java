@@ -37,6 +37,7 @@ public class StuSubDetail {
     private Integer convertedMark;
 
     @OneToOne(fetch = FetchType.LAZY)
+    @MapsId
     @JoinColumn(name = "id", insertable = false, updatable = false)
     private StuSub stuSub;
 

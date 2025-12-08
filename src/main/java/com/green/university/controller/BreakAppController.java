@@ -54,10 +54,24 @@ public class BreakAppController {
             throw new CustomRestfullException("로그인이 필요합니다.", HttpStatus.UNAUTHORIZED);
         }
 
-        String username = authentication.getName();
-        Integer userId = Integer.parseInt(username);
+        // getPrincipal()로 직접 PrincipalDto 객체 가져오기
+        Object principal = authentication.getPrincipal();
 
-        return userService.readPrincipalById(userId);
+        if (principal instanceof PrincipalDto) {
+            return (PrincipalDto) principal;
+        }
+
+        // Fallback: String인 경우 (예전 방식 호환)
+        if (principal instanceof String) {
+            try {
+                Integer userId = Integer.parseInt((String) principal);
+                return userService.readPrincipalById(userId);
+            } catch (NumberFormatException e) {
+                throw new CustomRestfullException("잘못된 사용자 정보입니다.", HttpStatus.UNAUTHORIZED);
+            }
+        }
+
+        throw new CustomRestfullException("인증 정보를 확인할 수 없습니다.", HttpStatus.UNAUTHORIZED);
     }
 
     /**
@@ -155,6 +169,7 @@ public class BreakAppController {
      */
     @GetMapping("/list/staff")
     public ResponseEntity<List<BreakApp>> breakAppListByState() {
+        System.out.println("===== breakAppListByStaff 메서드 호출됨 =====");
 
         PrincipalDto principal = getCurrentUser();
 

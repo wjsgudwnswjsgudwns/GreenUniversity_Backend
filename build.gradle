@@ -22,7 +22,7 @@ dependencies {
     // Validation support for DTOs and request parameters
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
-    // ✅ Jakarta EE로 변경 (javax → jakarta)
+    // Jakarta EE로 변경 (javax → jakarta)
     implementation 'org.glassfish.web:jakarta.servlet.jsp.jstl:3.0.1'
     implementation 'jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api:3.0.0'
 
@@ -35,7 +35,7 @@ dependencies {
     // Web starter
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
-    // ✅ MyBatis Spring Boot 3.x 호환 버전
+    // MyBatis Spring Boot 3.x 호환 버전
     implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3'
 
     // MySQL driver
