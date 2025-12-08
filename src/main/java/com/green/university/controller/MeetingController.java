@@ -127,7 +127,7 @@ public class MeetingController {
         }
         String sessionKey = meetingService.joinMeeting(meetingId, principal);
 
-        meetingService.joinMeeting(meetingId, principal);
+
 
         Map<String, String> body = new HashMap<>();
         body.put("message", "회의에 참가했습니다.");
