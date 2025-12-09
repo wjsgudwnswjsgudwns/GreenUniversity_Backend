@@ -203,4 +203,23 @@ public class AdminController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * 모든 학과 목록 조회 (인증된 사용자용)
+     * GET /api/admin/departments/all
+     */
+    @GetMapping("/departments/all")
+    public ResponseEntity<List<Department>> getAllDepartments() {
+        List<Department> departments = adminService.readDepartment();
+        return ResponseEntity.ok(departments);
+    }
+
+    /**
+     * 모든 단과대 목록 조회 (인증된 사용자용)
+     * GET /api/admin/colleges/all
+     */
+    @GetMapping("/colleges/all")
+    public ResponseEntity<List<College>> getAllColleges() {
+        List<College> colleges = adminService.readCollege();
+        return ResponseEntity.ok(colleges);
+    }
 }
