@@ -38,7 +38,6 @@ public class PreStuSubService {
     private SubjectJpaRepository subjectJpaRepository;
 
 
-
     // 학생의 예비 수강신청 내역에 해당 강의가 존재하는지 확인(JPA)
     public PreStuSub readPreStuSub(Integer studentId, Integer subjectId) {
         return preStuSubJpaRepository.findByIdStudentIdAndIdSubjectId(studentId, subjectId);
@@ -73,11 +72,6 @@ public class PreStuSubService {
             throw new CustomRestfullException("이미 예비 수강 신청한 과목입니다.", HttpStatus.BAD_REQUEST);
         }
 
-        // ✅ 정원 체크 (preNumOfStudent 사용)
-        if (targetSubject.getPreNumOfStudent() >= targetSubject.getCapacity()) {
-            throw new CustomRestfullException("정원이 초과되었습니다.", HttpStatus.BAD_REQUEST);
-        }
-
         // 학점 체크
         List<PreStuSub> preStuSubs = preStuSubJpaRepository.findByIdStudentId(studentId);
         int sumGrades = preStuSubs.stream()
@@ -110,7 +104,7 @@ public class PreStuSubService {
         PreStuSub preStuSub = new PreStuSub(studentId, subjectId);
         preStuSubJpaRepository.save(preStuSub);
 
-        // ✅ 예비 수강 신청 현재인원 +1
+        // 예비 수강 신청 현재인원 +1
         subjectService.updatePlusPreNumOfStudent(subjectId);
     }
 
@@ -122,7 +116,7 @@ public class PreStuSubService {
 
         preStuSubJpaRepository.delete(preStuSub);
 
-        // ✅ 예비 수강 신청 현재인원 -1
+        // 예비 수강 신청 현재인원 -1
         subjectService.updateMinusPreNumOfStudent(subjectId);
     }
 }
