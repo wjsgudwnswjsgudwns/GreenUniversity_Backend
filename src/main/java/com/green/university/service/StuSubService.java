@@ -64,6 +64,8 @@ public class StuSubService {
         );
     }
 
+    // StuSubService.java의 createStuSub 메서드 수정
+
     @Transactional
     public void createStuSub(Integer studentId, Integer subjectId) {
 
@@ -71,19 +73,17 @@ public class StuSubService {
         Subject targetSubject = subjectJpaRepository.findById(subjectId)
                 .orElseThrow(() -> new CustomRestfullException("과목 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
-        // ✅ 정원 체크 로직 수정
-        // 예비 수강 신청 인원이 정원을 초과한 경우: preNumOfStudent 기준으로 체크
-        // 그렇지 않은 경우: numOfStudent(현재 인원) 기준으로 체크
+        // 본 수강 신청 정원 체크 로직
         boolean isOverCapacity = targetSubject.getPreNumOfStudent() > targetSubject.getCapacity();
 
         if (isOverCapacity) {
-            // 정원 초과 과목: 예비 신청자만 신청 가능 (예비 신청 여부 확인)
+            // 정원 초과 과목: 예비 신청 여부 확인
             PreStuSub preStuSub = preStuSubService.readPreStuSub(studentId, subjectId);
             if (preStuSub == null) {
-                throw new CustomRestfullException("예비 수강 신청을 하지 않은 과목입니다.", HttpStatus.BAD_REQUEST);
+                throw new CustomRestfullException("예비 수강 신청을 하지 않은 과목입니다. 정원 초과 과목은 예비 수강 신청자만 신청 가능합니다.", HttpStatus.BAD_REQUEST);
             }
 
-            // 이미 정원만큼 신청이 완료되었는지 체크
+            // 현재 인원이 정원을 초과했는지만 체크 (선착순)
             if (targetSubject.getNumOfStudent() >= targetSubject.getCapacity()) {
                 throw new CustomRestfullException("수강 정원이 초과되었습니다.", HttpStatus.BAD_REQUEST);
             }
@@ -94,15 +94,19 @@ public class StuSubService {
             }
         }
 
-        // 현재 총 신청 학점 - PreStuSub에서 Subject 조회
-        List<PreStuSub> preStuSubs = preStuSubJpaRepository.findByIdStudentId(studentId);
+        // 중복 신청 체크
+        Optional<StuSub> existingStuSub = stuSubJpaRepository.findByStudentIdAndSubjectId(studentId, subjectId);
+        if (existingStuSub.isPresent()) {
+            throw new CustomRestfullException("이미 수강 신청한 과목입니다.", HttpStatus.BAD_REQUEST);
+        }
 
-        int sumGrades = preStuSubs.stream()
-                .map(ps -> subjectJpaRepository.findById(ps.getSubjectId()).orElse(null))
-                .filter(subject -> subject != null
-                        && subject.getSubYear().equals(Define.CURRENT_YEAR)
-                        && subject.getSemester().equals(Define.CURRENT_SEMESTER))
-                .mapToInt(Subject::getGrades)
+        // 본 수강 신청 완료된 과목들의 총 학점 계산
+        List<StuSub> completedStuSubs = stuSubJpaRepository.findByStudentIdAndSubject_SubYearAndSubject_Semester(
+                studentId, Define.CURRENT_YEAR, Define.CURRENT_SEMESTER);
+
+        int sumGrades = completedStuSubs.stream()
+                .filter(ss -> ss.getSubject() != null)
+                .mapToInt(ss -> ss.getSubject().getGrades())
                 .sum();
 
         StuSubSumGradesDto stuSubSumGradesDto = new StuSubSumGradesDto();
@@ -111,11 +115,11 @@ public class StuSubService {
         // 최대 수강 가능 학점을 넘지 않는지 확인
         StuSubUtil.checkSumGrades(targetSubject, stuSubSumGradesDto);
 
-        // 해당 학생의 예비 수강 신청 내역 시간표
-        List<StuSubDayTimeDto> dayTimeList = preStuSubs.stream()
-                .map(ps -> subjectJpaRepository.findById(ps.getSubjectId()).orElse(null))
-                .filter(subject -> subject != null)
-                .map(subject -> {
+        // 본 수강 신청 완료된 과목들의 시간표로 겹침 체크
+        List<StuSubDayTimeDto> dayTimeList = completedStuSubs.stream()
+                .filter(ss -> ss.getSubject() != null)
+                .map(ss -> {
+                    Subject subject = ss.getSubject();
                     StuSubDayTimeDto dto = new StuSubDayTimeDto();
                     dto.setSubDay(subject.getSubDay());
                     dto.setStartTime(subject.getStartTime());
@@ -127,7 +131,7 @@ public class StuSubService {
         // 현재 학생의 시간표와 겹치지 않는지 확인
         StuSubUtil.checkDayTime(targetSubject, dayTimeList);
 
-        // ✅ 수강신청 내역 추가
+        // 수강신청 내역 추가
         Student student = studentJpaRepository.findById(studentId)
                 .orElseThrow(() -> new CustomRestfullException("학생 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
@@ -137,7 +141,7 @@ public class StuSubService {
 
         StuSub savedStuSub = stuSubJpaRepository.save(stuSub);
 
-        // ✅ 수강 상세 내역 추가
+        // 수강 상세 내역 추가
         StuSubDetail stuSubDetail = new StuSubDetail();
         stuSubDetail.setStuSub(savedStuSub);
         stuSubDetail.setStudentId(studentId);
@@ -163,7 +167,7 @@ public class StuSubService {
         subjectService.updateMinusNumOfStudent(subjectId);
     }
 
-    // ✅ 예비 수강 신청 기간 -> 수강 신청 기간 변경 시 로직 (개선)
+    // 예비 수강 신청 기간 -> 수강 신청 기간 변경 시 로직 (개선)
     @Transactional
     public void createStuSubByPreStuSub() {
         System.out.println("=== 예비 수강 신청 → 본 수강 신청 자동 전환 시작 ===");
@@ -174,7 +178,7 @@ public class StuSubService {
                 Define.CURRENT_SEMESTER
         );
 
-        System.out.println("✅ 자동 승인 대상 과목 수: " + approvedSubjects.size());
+        System.out.println("자동 승인 대상 과목 수: " + approvedSubjects.size());
 
         for (Subject subject : approvedSubjects) {
             List<PreStuSub> preAppList = preStuSubJpaRepository.findByIdSubjectId(subject.getId());
@@ -215,7 +219,7 @@ public class StuSubService {
                         System.out.println("  → 학생 " + pss.getStudentId() + " 이미 수강 신청됨 (스킵)");
                     }
                 } catch (Exception e) {
-                    System.err.println("  ❌ 자동 처리 실패: 학생 " + pss.getStudentId() +
+                    System.err.println(" 자동 처리 실패: 학생 " + pss.getStudentId() +
                             ", 과목 " + pss.getSubjectId() + " - " + e.getMessage());
                 }
             }
@@ -229,7 +233,7 @@ public class StuSubService {
                 Define.CURRENT_SEMESTER
         );
 
-        System.out.println("⚠️  정원 초과 과목 수: " + overCapacitySubjects.size());
+        System.out.println("정원 초과 과목 수: " + overCapacitySubjects.size());
 
         for (Subject subject : overCapacitySubjects) {
             int preApplicants = subject.getPreNumOfStudent();
@@ -238,7 +242,7 @@ public class StuSubService {
             System.out.println("과목 [" + subject.getName() + "] - 정원: " + capacity +
                     ", 예비 신청: " + preApplicants + " (정원 초과 " + (preApplicants - capacity) + "명)");
 
-            // ✅ 정원 초과 과목은 numOfStudent를 0으로 유지 (자동 승인 안함)
+            // 정원 초과 과목은 numOfStudent를 0으로 유지 (자동 승인 안함)
             subject.setNumOfStudent(0);
             subjectJpaRepository.save(subject);
 
@@ -248,7 +252,7 @@ public class StuSubService {
         System.out.println("=== 자동 전환 완료 ===");
     }
 
-    // ✅ 수강 신청 내역과 예비 수강 신청 내역 조인 후 조회 -> 예비 수강 신청에만 존재
+    // 수강 신청 내역과 예비 수강 신청 내역 조인 후 조회 -> 예비 수강 신청에만 존재
     @Transactional(readOnly = true)
     public List<PreStuSub> readPreStuSubByStuSub(Integer studentId) {
         // 예비 수강 신청 목록
