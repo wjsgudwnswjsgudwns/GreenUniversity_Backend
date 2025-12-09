@@ -2,6 +2,7 @@ package com.green.university.controller;
 
 import java.util.List;
 
+import com.green.university.dto.response.PrincipalDto;
 import com.green.university.dto.response.StuSubResponseDto;
 import com.green.university.dto.response.SubjectPeriodForProfessorDto;
 import com.green.university.dto.response.SyllabusResponseDto;
@@ -53,7 +54,8 @@ public class ProfessorController {
      */
     @GetMapping("/subject")
     public ResponseEntity<Map<String, Object>> subjectList(Authentication authentication) {
-        Integer professorId = Integer.parseInt(authentication.getName());
+        PrincipalDto principal = (PrincipalDto) authentication.getPrincipal();
+        Integer professorId = principal.getId();
 
         List<SubjectPeriodForProfessorDto> semesterList = professorService.selectSemester(professorId);
 

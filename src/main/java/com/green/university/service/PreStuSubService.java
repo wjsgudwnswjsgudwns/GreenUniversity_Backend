@@ -1,9 +1,11 @@
 package com.green.university.service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import com.green.university.repository.SubjectJpaRepository;
+import com.green.university.repository.model.PreStuSubId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -61,61 +63,66 @@ public class PreStuSubService {
 	// 학생의 예비 수강신청 내역 추가
     @Transactional
     public void createPreStuSub(Integer studentId, Integer subjectId) {
-
         // 신청 대상 과목 정보
         Subject targetSubject = subjectJpaRepository.findById(subjectId)
                 .orElseThrow(() -> new CustomRestfullException("과목 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
-        // 현재 총 신청 학점
+        // 중복 체크
+        Optional<PreStuSub> existing = preStuSubJpaRepository.findById(new PreStuSubId(studentId, subjectId));
+        if (existing.isPresent()) {
+            throw new CustomRestfullException("이미 예비 수강 신청한 과목입니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        // ✅ 정원 체크 (preNumOfStudent 사용)
+        if (targetSubject.getPreNumOfStudent() >= targetSubject.getCapacity()) {
+            throw new CustomRestfullException("정원이 초과되었습니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        // 학점 체크
         List<PreStuSub> preStuSubs = preStuSubJpaRepository.findByIdStudentId(studentId);
         int sumGrades = preStuSubs.stream()
-                .mapToInt(ps -> {
-                    Subject subject = subjectJpaRepository.findById(ps.getSubjectId()).orElse(null);
-                    return subject != null && subject.getSubYear().equals(Define.CURRENT_YEAR)
-                            && subject.getSemester().equals(Define.CURRENT_SEMESTER)
-                            ? subject.getGrades() : 0;
-                })
+                .map(ps -> subjectJpaRepository.findById(ps.getSubjectId()).orElse(null))
+                .filter(subject -> subject != null
+                        && subject.getSubYear().equals(Define.CURRENT_YEAR)
+                        && subject.getSemester().equals(Define.CURRENT_SEMESTER))
+                .mapToInt(Subject::getGrades)
                 .sum();
 
         StuSubSumGradesDto stuSubSumGradesDto = new StuSubSumGradesDto();
         stuSubSumGradesDto.setSumGrades(sumGrades);
-
-        // 최대 수강 가능 학점을 넘지 않는지 확인
         StuSubUtil.checkSumGrades(targetSubject, stuSubSumGradesDto);
 
-        // 해당 학생의 예비 수강 신청 내역 시간표
+        // 시간표 겹침 체크
         List<StuSubDayTimeDto> dayTimeList = preStuSubs.stream()
-                .map(ps -> {
-                    Subject subject = subjectJpaRepository.findById(ps.getSubjectId()).orElse(null);
-                    if (subject == null) return null;
-
+                .map(ps -> subjectJpaRepository.findById(ps.getSubjectId()).orElse(null))
+                .filter(subject -> subject != null)
+                .map(subject -> {
                     StuSubDayTimeDto dto = new StuSubDayTimeDto();
                     dto.setSubDay(subject.getSubDay());
                     dto.setStartTime(subject.getStartTime());
                     dto.setEndTime(subject.getEndTime());
                     return dto;
                 })
-                .filter(dto -> dto != null)
                 .collect(Collectors.toList());
-
-        // 현재 학생의 시간표와 겹치지 않는지 확인
         StuSubUtil.checkDayTime(targetSubject, dayTimeList);
 
-        // 수강신청 내역 추가
+        // 예비 수강 신청 내역 추가
         PreStuSub preStuSub = new PreStuSub(studentId, subjectId);
         preStuSubJpaRepository.save(preStuSub);
 
-        // 해당 강의 현재인원 +1
-        subjectService.updatePlusNumOfStudent(subjectId);
+        // ✅ 예비 수강 신청 현재인원 +1
+        subjectService.updatePlusPreNumOfStudent(subjectId);
     }
 
     // 학생의 예비 수강신청 내역 삭제(JPA)
     @Transactional
     public void deletePreStuSub(Integer studentId, Integer subjectId) {
-        // JPA 삭제
-        preStuSubJpaRepository.deleteByIdStudentIdAndIdSubjectId(studentId, subjectId);
-        // 해당 강의 현재인원 -1
-        subjectService.updateMinusNumOfStudent(subjectId);
-    }
+        PreStuSub preStuSub = preStuSubJpaRepository.findById(new PreStuSubId(studentId, subjectId))
+                .orElseThrow(() -> new CustomRestfullException("예비 수강신청 취소가 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR));
 
+        preStuSubJpaRepository.delete(preStuSub);
+
+        // ✅ 예비 수강 신청 현재인원 -1
+        subjectService.updateMinusPreNumOfStudent(subjectId);
+    }
 }

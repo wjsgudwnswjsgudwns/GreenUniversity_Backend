@@ -75,6 +75,11 @@ public class Subject {
     @Column(name = "capacity", nullable = false)
     private Integer capacity;
 
+    // 예비 수강 신청 현재 인원
+    @Column(name = "pre_num_of_student")
+    private Integer preNumOfStudent = 0;
+
+    // 실제 수강 신청 현재 인원
     @Column(name = "num_of_student")
     private Integer numOfStudent;
 }

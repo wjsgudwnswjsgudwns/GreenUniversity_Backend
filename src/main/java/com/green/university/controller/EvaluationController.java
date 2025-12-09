@@ -18,13 +18,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.green.university.dto.EvaluationDto;
 import com.green.university.dto.MyEvaluationDto;
+import com.green.university.dto.response.PrincipalDto;
 import com.green.university.dto.response.QuestionDto;
 import com.green.university.handler.exception.CustomRestfullException;
 import com.green.university.service.EvaluationService;
 import com.green.university.service.QuestionService;
 
 /**
- * 강의 평가와 관련된 REST API를 제공하는 컨트롤러입니다.
+ * 강의 평가와 관련된 REST API를 제공하는 컨트롤러입니다. (JWT 기반)
  */
 @RestController
 @RequestMapping("/api/evaluation")
@@ -35,6 +36,14 @@ public class EvaluationController {
 
     @Autowired
     private QuestionService questionService;
+
+    /**
+     * Authentication에서 사용자 ID 추출
+     */
+    private Integer getUserId(Authentication authentication) {
+        PrincipalDto principal = (PrincipalDto) authentication.getPrincipal();
+        return principal.getId();
+    }
 
     /**
      * 강의 평가 질문을 조회합니다.
@@ -60,25 +69,26 @@ public class EvaluationController {
             @RequestBody EvaluationDto evaluationFormDto,
             Authentication authentication) {
 
-        Integer studentId = Integer.parseInt(authentication.getName());
+        Integer studentId = getUserId(authentication);
 
         evaluationFormDto.setStudentId(studentId);
         evaluationFormDto.setSubjectId(subjectId);
 
+        // 모든 질문 답변 여부 확인
         if (evaluationFormDto.getAnswer1() == null) {
-            throw new CustomRestfullException("1번 질문에 답 해주세요", HttpStatus.BAD_REQUEST);
+            throw new CustomRestfullException("1번 질문에 답해주세요", HttpStatus.BAD_REQUEST);
         } else if (evaluationFormDto.getAnswer2() == null) {
-            throw new CustomRestfullException("2번 질문에 답 해주세요", HttpStatus.BAD_REQUEST);
+            throw new CustomRestfullException("2번 질문에 답해주세요", HttpStatus.BAD_REQUEST);
         } else if (evaluationFormDto.getAnswer3() == null) {
-            throw new CustomRestfullException("3번 질문에 답 해주세요", HttpStatus.BAD_REQUEST);
+            throw new CustomRestfullException("3번 질문에 답해주세요", HttpStatus.BAD_REQUEST);
         } else if (evaluationFormDto.getAnswer4() == null) {
-            throw new CustomRestfullException("4번 질문에 답 해주세요", HttpStatus.BAD_REQUEST);
+            throw new CustomRestfullException("4번 질문에 답해주세요", HttpStatus.BAD_REQUEST);
         } else if (evaluationFormDto.getAnswer5() == null) {
-            throw new CustomRestfullException("5번 질문에 답 해주세요", HttpStatus.BAD_REQUEST);
+            throw new CustomRestfullException("5번 질문에 답해주세요", HttpStatus.BAD_REQUEST);
         } else if (evaluationFormDto.getAnswer6() == null) {
-            throw new CustomRestfullException("6번 질문에 답 해주세요", HttpStatus.BAD_REQUEST);
+            throw new CustomRestfullException("6번 질문에 답해주세요", HttpStatus.BAD_REQUEST);
         } else if (evaluationFormDto.getAnswer7() == null) {
-            throw new CustomRestfullException("7번 질문에 답 해주세요", HttpStatus.BAD_REQUEST);
+            throw new CustomRestfullException("7번 질문에 답해주세요", HttpStatus.BAD_REQUEST);
         }
 
         evaluationService.createEvanluation(evaluationFormDto);
@@ -89,11 +99,11 @@ public class EvaluationController {
     }
 
     /**
-     * 강의 평가 처음화면 (교수)
+     * 강의 평가 초기화면 (교수)
      */
     @GetMapping("/read")
     public ResponseEntity<Map<String, Object>> readEvaluation(Authentication authentication) {
-        Integer professorId = Integer.parseInt(authentication.getName());
+        Integer professorId = getUserId(authentication);
 
         List<String> subjectName = evaluationService.readSubjectName(professorId);
         List<MyEvaluationDto> eval = evaluationService.readEvaluationByProfessorId(professorId);
@@ -112,7 +122,7 @@ public class EvaluationController {
             @RequestParam String subjectId,
             Authentication authentication) {
 
-        Integer professorId = Integer.parseInt(authentication.getName());
+        Integer professorId = getUserId(authentication);
 
         List<String> subjectName = evaluationService.readSubjectName(professorId);
         List<MyEvaluationDto> eval = evaluationService.readEvaluationByProfessorIdAndName(

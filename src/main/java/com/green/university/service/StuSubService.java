@@ -141,58 +141,60 @@ public class StuSubService {
     @Transactional
     public void createStuSubByPreStuSub() {
 
-        // 1. 정원 >= 신청인원인 강의
-        List<Subject> subjects1 = subjectJpaRepository.findByCapacityGreaterThanEqualNumOfStudent();
+        // 1. 정원 >= 예비신청인원인 강의
+        List<Subject> subjects1 = subjectJpaRepository.findByCapacityGreaterThanEqualPreNumOfStudent(
+                Define.CURRENT_YEAR,
+                Define.CURRENT_SEMESTER
+        );
 
         for (Subject subject : subjects1) {
-            // 예비 수강 신청에서 해당 강의를 신청했던 내역 가져오기
             List<PreStuSub> preAppList = preStuSubJpaRepository.findByIdSubjectId(subject.getId());
 
             for (PreStuSub pss : preAppList) {
                 try {
-                    // 수강 신청 내역이 없는지 확인
                     Optional<StuSub> existingStuSub = stuSubJpaRepository
                             .findByStudentIdAndSubjectId(pss.getStudentId(), pss.getSubjectId());
 
                     if (!existingStuSub.isPresent()) {
-                        // 학생 정보 조회
                         Student student = studentJpaRepository.findById(pss.getStudentId())
                                 .orElseThrow(() -> new CustomRestfullException(
                                         "학생 정보를 찾을 수 없습니다. ID: " + pss.getStudentId(),
                                         HttpStatus.NOT_FOUND));
 
-                        // 수강신청 내역 추가
                         StuSub stuSub = new StuSub();
                         stuSub.setStudent(student);
                         stuSub.setSubject(subject);
 
                         StuSub savedStuSub = stuSubJpaRepository.save(stuSub);
 
-                        // ✅ StuSubDetail 생성 (@MapsId 사용)
                         StuSubDetail stuSubDetail = new StuSubDetail();
-                        stuSubDetail.setStuSub(savedStuSub);  // ← 이렇게 하면 ID가 자동으로 설정됨
+                        stuSubDetail.setStuSub(savedStuSub);
                         stuSubDetail.setStudentId(pss.getStudentId());
                         stuSubDetail.setSubjectId(pss.getSubjectId());
-                        // absent, lateness 등 다른 필드는 기본값 null
 
                         stuSubDetailJpaRepository.save(stuSubDetail);
 
+                        subject.setNumOfStudent(subject.getNumOfStudent() + 1);
                     }
                 } catch (Exception e) {
-                    // 개별 학생 처리 실패 시 로그만 남기고 계속 진행
-
+                    System.err.println("자동 처리 실패: 학생 " + pss.getStudentId() +
+                            ", 과목 " + pss.getSubjectId() + " - " + e.getMessage());
                 }
             }
+
+            subjectJpaRepository.save(subject);
         }
 
-        // 2. 정원 < 신청인원인 강의 - 현재 인원 초기화
-        List<Subject> subjects2 = subjectJpaRepository.findByCapacityLessThanNumOfStudent();
+        // 2. 정원 초과 과목 처리
+        List<Subject> subjects2 = subjectJpaRepository.findByCapacityLessThanPreNumOfStudent(
+                Define.CURRENT_YEAR,
+                Define.CURRENT_SEMESTER
+        );
 
         for (Subject subject : subjects2) {
             subject.setNumOfStudent(0);
             subjectJpaRepository.save(subject);
         }
-
     }
 
     // 수강 신청 내역과 예비 수강 신청 내역 조인 후 조회 -> 예비 수강 신청에만 존재

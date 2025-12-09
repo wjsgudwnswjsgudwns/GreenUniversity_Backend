@@ -9,6 +9,7 @@ import com.green.university.dto.response.PrincipalDto;
 import com.green.university.dto.response.StuSubAppDto;
 import com.green.university.repository.SubjectJpaRepository;
 import com.green.university.repository.model.*;
+import com.green.university.utils.Define;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -64,10 +65,8 @@ public class StuSubController {
         return principal.getId();
     }
 
-    /**
-     * [수정됨] Subject 엔티티를 StuSubAppDto로 변환하는 헬퍼 메서드
-     */
-    private StuSubAppDto convertToDto(Subject subject) {
+    // Subject 엔티티를 StuSubAppDto로 변환하는 헬퍼 메서드
+    private StuSubAppDto convertToDto(Subject subject, int period) {
         StuSubAppDto dto = new StuSubAppDto();
         dto.setSubjectId(subject.getId());
         dto.setSubjectName(subject.getName());
@@ -75,22 +74,26 @@ public class StuSubController {
         dto.setSubDay(subject.getSubDay());
         dto.setStartTime(subject.getStartTime());
         dto.setEndTime(subject.getEndTime());
-        dto.setNumOfStudent(subject.getNumOfStudent());
+
+        // 기간에 따라 다른 인원 반환
+        if (period == 0) {
+            dto.setNumOfStudent(subject.getPreNumOfStudent());
+        } else {
+            dto.setNumOfStudent(subject.getNumOfStudent());
+        }
+
         dto.setCapacity(subject.getCapacity());
 
-        // Null Check: 교수 정보
         if (subject.getProfessor() != null) {
             dto.setProfessorName(subject.getProfessor().getName());
         }
 
-        // Null Check: 강의실 정보
         if (subject.getRoom() != null) {
             dto.setRoomId(subject.getRoom().getId());
         }
 
         return dto;
     }
-
 
 
     /**
@@ -179,7 +182,13 @@ public class StuSubController {
 
         List<SubjectDto> subjectListLimit = subjectService.readSubjectListByCurrentSemesterPage(page);
 
+        // ✅ 예비 수강 신청 인원으로 교체
         for (SubjectDto sub : subjectListLimit) {
+            Subject subject = subjectJpaRepository.findById(sub.getId()).orElse(null);
+            if (subject != null) {
+                sub.setNumOfStudent(subject.getPreNumOfStudent());
+            }
+
             PreStuSub preStuSub = preStuSubService.readPreStuSub(studentId, sub.getId());
             sub.setStatus(preStuSub != null);
         }
@@ -201,6 +210,8 @@ public class StuSubController {
         body.put("subNameList", subNameList);
         return ResponseEntity.ok(body);
     }
+
+
 
     /**
      * 예비 수강 신청 처리 (신청)
@@ -254,7 +265,13 @@ public class StuSubController {
         List<SubjectDto> subjectList = subjectService
                 .readSubjectListSearchByCurrentSemester(currentSemesterSubjectSearchFormDto);
 
+        // ✅ 예비 수강 신청 인원으로 교체
         for (SubjectDto sub : subjectList) {
+            Subject subject = subjectJpaRepository.findById(sub.getId()).orElse(null);
+            if (subject != null) {
+                sub.setNumOfStudent(subject.getPreNumOfStudent());
+            }
+
             PreStuSub preStuSub = preStuSubService.readPreStuSub(studentId, sub.getId());
             sub.setStatus(preStuSub != null);
         }
@@ -292,12 +309,14 @@ public class StuSubController {
         List<BreakApp> breakAppList = breakAppService.readByStudentId(studentInfo.getId());
         StuStatUtil.checkStuStat("수강신청", stuStatEntity, breakAppList);
 
+        // ✅ 전체 과목 조회
         List<SubjectDto> subjectList = subjectService.readSubjectListByCurrentSemester();
         int subjectCount = subjectList.size();
         int pageCount = (int) Math.ceil(subjectCount / 20.0);
 
         List<SubjectDto> subjectListLimit = subjectService.readSubjectListByCurrentSemesterPage(page);
 
+        // 본 수강 신청 완료 여부 체크
         for (SubjectDto sub : subjectListLimit) {
             StuSub stuSub = stuSubService.readStuSub(studentId, sub.getId());
             sub.setStatus(stuSub != null);
@@ -320,6 +339,7 @@ public class StuSubController {
         body.put("subNameList", subNameList);
         return ResponseEntity.ok(body);
     }
+
 
     /**
      * 수강 신청 강의 목록에서 필터링
@@ -358,6 +378,7 @@ public class StuSubController {
         body.put("subNameList", subNameList);
         return ResponseEntity.ok(body);
     }
+
 
     /**
      * 수강 신청 처리 (신청)
@@ -404,7 +425,6 @@ public class StuSubController {
     public ResponseEntity<?> preStuSubAppList(@RequestParam Integer type, Authentication authentication) {
         Integer studentId = getStudentId(authentication);
 
-        // 학적 상태 확인
         Student studentInfo = userService.readStudent(studentId);
         StuStat stuStatEntity = stuStatService.readCurrentStatus(studentInfo.getId());
         List<BreakApp> breakAppList = breakAppService.readByStudentId(studentInfo.getId());
@@ -413,60 +433,65 @@ public class StuSubController {
         Map<String, Object> body = new HashMap<>();
         body.put("type", type);
 
-        // type 0: 예비 수강 신청 기간 조회
         if (type == 0) {
+            // 예비 수강 신청 기간 조회
             List<PreStuSub> preStuSubList = preStuSubService.readPreStuSubList(studentId);
 
-            // PreStuSub 리스트 -> StuSubAppDto 리스트로 변환
             List<StuSubAppDto> dtoList = new ArrayList<>();
             int sumGrades = 0;
 
             for (PreStuSub pss : preStuSubList) {
                 Subject subject = subjectJpaRepository.findById(pss.getSubjectId()).orElse(null);
                 if (subject != null) {
-                    dtoList.add(convertToDto(subject)); // DTO 변환
+                    StuSubAppDto dto = convertToDto(subject, 0); // 예비 인원
+                    dtoList.add(dto);
                     sumGrades += subject.getGrades();
                 }
             }
 
-            body.put("stuSubList", dtoList); // 변환된 DTO 리스트 전달
+            body.put("stuSubList", dtoList);
             body.put("sumGrades", sumGrades);
             return ResponseEntity.ok(body);
         }
 
-        // type 1: 본 수강 신청 기간 조회
+        // type 1: 본 수강 신청 기간
         if (SUGANG_PERIOD != 1) {
             throw new CustomRestfullException("수강 신청 기간이 아닙니다.", HttpStatus.BAD_REQUEST);
         }
 
-        // 1. 신청 미완료 목록 (예비 수강 신청 내역 중 실제 수강 신청 안 한 것)
+        // ✅ 신청 미완료 목록: 예비 수강 신청했지만 본 수강 신청 안 한 과목
         List<PreStuSub> preStuSubList1 = stuSubService.readPreStuSubByStuSub(studentId);
         List<StuSubAppDto> preDtoList = new ArrayList<>();
 
         for (PreStuSub pss : preStuSubList1) {
             Subject subject = subjectJpaRepository.findById(pss.getSubjectId()).orElse(null);
             if (subject != null) {
-                preDtoList.add(convertToDto(subject));
+                StuSubAppDto dto = convertToDto(subject, 1); // 본 수강 인원
+                preDtoList.add(dto);
             }
         }
 
-        // 2. 신청 완료 목록 (StuSub)
+        // ✅ 신청 완료 목록: 본 수강 신청 완료한 과목
         List<StuSub> stuSubList = stuSubService.readStuSubList(studentId);
         List<StuSubAppDto> completedDtoList = new ArrayList<>();
         int sumGrades = 0;
 
         for (StuSub ss : stuSubList) {
             if (ss.getSubject() != null) {
-                completedDtoList.add(convertToDto(ss.getSubject()));
+                StuSubAppDto dto = convertToDto(ss.getSubject(), 1); // 본 수강 인원
+                completedDtoList.add(dto);
                 sumGrades += ss.getSubject().getGrades();
             }
         }
 
-        body.put("preStuSubList", preDtoList);     // DTO 리스트 (미완료)
-        body.put("stuSubList", completedDtoList);  // DTO 리스트 (완료)
+        body.put("preStuSubList", preDtoList);     // 신청 미완료
+        body.put("stuSubList", completedDtoList);  // 신청 완료
         body.put("sumGrades", sumGrades);
         return ResponseEntity.ok(body);
     }
+
+
+
 
     /**
      * 수강 신청 내역 조회
@@ -479,7 +504,6 @@ public class StuSubController {
 
         Integer studentId = getStudentId(authentication);
 
-        // 학적 상태 확인
         Student studentInfo = userService.readStudent(studentId);
         StuStat stuStatEntity = stuStatService.readCurrentStatus(studentInfo.getId());
         List<BreakApp> breakAppList = breakAppService.readByStudentId(studentInfo.getId());
@@ -487,19 +511,19 @@ public class StuSubController {
 
         List<StuSub> stuSubList = stuSubService.readStuSubList(studentId);
 
-        // StuSub 리스트 -> StuSubAppDto 리스트로 변환
         List<StuSubAppDto> dtoList = new ArrayList<>();
         int sumGrades = 0;
 
         for (StuSub ss : stuSubList) {
             if (ss.getSubject() != null) {
-                dtoList.add(convertToDto(ss.getSubject()));
+                // ✅ 본 수강 신청 인원으로 변환
+                dtoList.add(convertToDto(ss.getSubject(), 1));
                 sumGrades += ss.getSubject().getGrades();
             }
         }
 
         Map<String, Object> body = new HashMap<>();
-        body.put("stuSubList", dtoList); // 변환된 DTO 리스트
+        body.put("stuSubList", dtoList);
         body.put("sumGrades", sumGrades);
         return ResponseEntity.ok(body);
     }

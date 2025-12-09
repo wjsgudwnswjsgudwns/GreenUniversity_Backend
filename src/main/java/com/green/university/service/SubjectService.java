@@ -255,34 +255,55 @@ public class SubjectService {
 	/**
 	 * 현재 인원을 1명 추가함
 	 */
-	@Transactional
-	public void updatePlusNumOfStudent(Integer id) {
-        // JPA를 사용하여 과목의 현재 인원 +1 처리
-        Subject subject = subjectJpaRepository.findById(id)
-                .orElseThrow(() -> new CustomRestfullException("과목을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
-        Integer current = subject.getNumOfStudent() == null ? 0 : subject.getNumOfStudent();
-        subject.setNumOfStudent(current + 1);
-        subjectJpaRepository.save(subject);
-	}
+    @Transactional
+    public void updatePlusNumOfStudent(Integer subjectId) {
+        Subject subject = subjectJpaRepository.findById(subjectId)
+                .orElseThrow(() -> new CustomRestfullException("과목 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
+        subject.setNumOfStudent(subject.getNumOfStudent() + 1);
+        subjectJpaRepository.save(subject);
+    }
 	/**
 	 * 현재 인원을 1명 삭제함
 	 */
-	@Transactional
-	public void updateMinusNumOfStudent(Integer id) {
-        Subject subject = subjectJpaRepository.findById(id)
-                .orElseThrow(() -> new CustomRestfullException("과목을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
-        Integer current = subject.getNumOfStudent() == null ? 0 : subject.getNumOfStudent();
-        if (current > 0) {
-            subject.setNumOfStudent(current - 1);
+    @Transactional
+    public void updateMinusNumOfStudent(Integer subjectId) {
+        Subject subject = subjectJpaRepository.findById(subjectId)
+                .orElseThrow(() -> new CustomRestfullException("과목 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        if (subject.getNumOfStudent() > 0) {
+            subject.setNumOfStudent(subject.getNumOfStudent() - 1);
+            subjectJpaRepository.save(subject);
         }
-        subjectJpaRepository.save(subject);
-	}
-	
+    }
+
 	@Transactional
 	public Subject readBySubjectId(Integer id) {
         return subjectJpaRepository.findById(id)
                 .orElseThrow(() -> new CustomRestfullException("과목을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 	}
 
+    // 예비 수강 신청 인원 +1
+    @Transactional
+    public void updatePlusPreNumOfStudent(Integer subjectId) {
+        Subject subject = subjectJpaRepository.findById(subjectId)
+                .orElseThrow(() -> new CustomRestfullException("과목 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        subject.setPreNumOfStudent(subject.getPreNumOfStudent() + 1);
+        subjectJpaRepository.save(subject);
+    }
+
+    // 예비 수강 신청 인원 -1
+    @Transactional
+    public void updateMinusPreNumOfStudent(Integer subjectId) {
+        Subject subject = subjectJpaRepository.findById(subjectId)
+                .orElseThrow(() -> new CustomRestfullException("과목 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        if (subject.getPreNumOfStudent() > 0) {
+            subject.setPreNumOfStudent(subject.getPreNumOfStudent() - 1);
+            subjectJpaRepository.save(subject);
+        }
+    }
+
+    //
 }
