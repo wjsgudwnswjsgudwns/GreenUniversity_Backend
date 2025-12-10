@@ -40,4 +40,7 @@ public class CounselingReservation {
 
     @Column(name = "updated_at", nullable = false)
     private Timestamp updatedAt;
+
+    @Column(name = "meeting_id")
+    private Integer meetingId;
 }

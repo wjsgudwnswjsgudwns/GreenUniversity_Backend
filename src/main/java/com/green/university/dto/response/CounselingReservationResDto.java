@@ -13,6 +13,10 @@ public class CounselingReservationResDto {
     private String studentName;
     private CounselingReservationStatus status;
     private String studentMemo;
+    private Integer meetingId;
     private LocalDateTime createdAt;
     private LocalDateTime canceledAt;
+    private LocalDateTime slotStartAt;
+    private LocalDateTime slotEndAt;
+    private String professorName; // 예약한 교수 이름
 }
