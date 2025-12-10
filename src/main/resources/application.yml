@@ -53,7 +53,7 @@ spring:
 
 gemini:
   api:
-    key:
+    key:AIzaSyCuwSZWm9xIUMPzEQoJg4nDbLFA
 
 
  # Removed mybatis configuration since the project now uses Spring Data JPA

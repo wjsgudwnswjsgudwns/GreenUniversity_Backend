@@ -42,10 +42,6 @@ spring:
   sql:
     init:
       mode: always
-#      schema-locations:
-#        - classpath:db/table.sql
-#      data-locations:
-#        - classpath:db/data.sql
   web:
     cors:
       allowed-origins: http://localhost:3000
@@ -53,6 +49,12 @@ spring:
   output:
     ansi:
       enabled: always
+
+
+gemini:
+  api:
+    key:AIzaSyCuwSZWm9xIUMPzEQoJg4nDbLFA
+
 
  # Removed mybatis configuration since the project now uses Spring Data JPA
 

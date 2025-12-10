@@ -68,8 +68,18 @@ public class StuSubController {
      * Authentication에서 학생 ID 추출
      */
     private Integer getStudentId(Authentication authentication) {
-        PrincipalDto principal = (PrincipalDto) authentication.getPrincipal();
-        return principal.getId();
+        if (authentication == null || authentication.getPrincipal() == null) {
+            throw new CustomRestfullException("로그인이 필요합니다.", HttpStatus.UNAUTHORIZED);
+        }
+
+        Object principalObj = authentication.getPrincipal();
+        
+        if (principalObj instanceof PrincipalDto) {
+            PrincipalDto principal = (PrincipalDto) principalObj;
+            return principal.getId();
+        }
+
+        throw new CustomRestfullException("유효하지 않은 인증 정보입니다.", HttpStatus.UNAUTHORIZED);
     }
 
     // Subject 엔티티를 StuSubAppDto로 변환하는 헬퍼 메서드
@@ -524,6 +534,41 @@ public class StuSubController {
         body.put("stuSubList", dtoList);
         body.put("sumGrades", sumGrades);
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * 수강 시간표 조회 (수강 신청 기간과 무관하게 조회 가능)
+     */
+    @GetMapping("/schedule")
+    public ResponseEntity<?> getSchedule(Authentication authentication) {
+        try {
+            if (authentication == null || authentication.getPrincipal() == null) {
+                throw new CustomRestfullException("로그인이 필요합니다.", HttpStatus.UNAUTHORIZED);
+            }
+
+            Integer studentId = getStudentId(authentication);
+
+            List<StuSub> stuSubList = stuSubService.readStuSubList(studentId);
+
+            List<StuSubAppDto> dtoList = new ArrayList<>();
+            int sumGrades = 0;
+
+            for (StuSub ss : stuSubList) {
+                if (ss.getSubject() != null) {
+                    dtoList.add(convertToDto(ss.getSubject(), 1));
+                    sumGrades += ss.getSubject().getGrades();
+                }
+            }
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("scheduleList", dtoList);
+            body.put("sumGrades", sumGrades);
+            return ResponseEntity.ok(body);
+        } catch (CustomRestfullException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new CustomRestfullException("시간표 조회 중 오류가 발생했습니다: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     /**
