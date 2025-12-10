@@ -53,6 +53,65 @@ public class MeetingService {
                 .orElseThrow(() -> new CustomRestfullException("회의를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
     }
 
+    private void validateJoinWindow(Meeting meeting, LocalDateTime now) {
+        // INSTANT 회의는 시간 제한 없이 바로 입장 가능
+        if ("INSTANT".equals(meeting.getType())) {
+            return;
+        }
+
+        LocalDateTime start = meeting.getStartAt().toLocalDateTime();
+        LocalDateTime end = meeting.getEndAt().toLocalDateTime();
+
+        // 시작 10분 전부터 입장 가능
+        if (now.isBefore(start.minusMinutes(10))) {
+            throw new CustomRestfullException(
+                    "회의 시작 10분 전부터 입장이 가능합니다.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+
+        // (선택) 종료 후 10분까지는 입장 허용, 그 이후는 막기
+        if (now.isAfter(end.plusMinutes(10))) {
+            throw new CustomRestfullException(
+                    "회의 입장 가능 시간이 지났습니다.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+    }
+
+
+    @Transactional
+    public MeetingParticipant addGuestParticipant(
+            Integer meetingId,
+            String email,
+            Integer userId
+    ) {
+        Meeting meeting = meetingJpaRepository.findById(meetingId)
+                .orElseThrow(() ->
+                        new CustomRestfullException("회의를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        User user = userService.readUserById(userId);
+
+        // 이미 있으면 갱신, 없으면 새로 생성 (upsert)
+        MeetingParticipant p = meetingParticipantJpaRepository
+                .findByMeeting_IdAndUser_Id(meetingId, userId)
+                .orElseGet(MeetingParticipant::new);
+
+        p.setMeeting(meeting);
+        p.setUser(user);
+        p.setEmail(email);
+        p.setRole("PARTICIPANT");  // 🔥 게스트는 항상 PARTICIPANT
+        p.setStatus("INVITED");
+
+        // 초대/등록 시점이므로 세션 정보 초기화
+        p.setSessionKey(null);
+        p.setJoinedAt(null);
+        p.setLeftAt(null);
+        p.setLastActiveAt(null);
+
+        return meetingParticipantJpaRepository.save(p);
+    }
+
     /**
      * 공통: 현재 시간 기준으로 회의 상태 갱신
      *
@@ -147,6 +206,7 @@ public class MeetingService {
         return newSessionKey;
     }
 
+
     /**
      * 즉시 회의 생성.
      */
@@ -203,7 +263,7 @@ public class MeetingService {
         if (reqDto.getStartAt() == null || reqDto.getEndAt() == null) {
             throw new CustomRestfullException("시작/종료 시간이 반드시 필요합니다.", HttpStatus.BAD_REQUEST);
         }
-        if (reqDto.getEndAt().isBefore(reqDto.getStartAt())) {
+        if (reqDto.getEndAt().before(reqDto.getStartAt())) {
             throw new CustomRestfullException("종료 시간이 시작 시간보다 빠를 수 없습니다.", HttpStatus.BAD_REQUEST);
         }
 
@@ -216,8 +276,8 @@ public class MeetingService {
         meeting.setTitle(reqDto.getTitle());
         meeting.setDescription(reqDto.getDescription());
 
-        meeting.setStartAt(Timestamp.valueOf(reqDto.getStartAt()));
-        meeting.setEndAt(Timestamp.valueOf(reqDto.getEndAt()));
+        meeting.setStartAt(reqDto.getStartAt());
+        meeting.setEndAt(reqDto.getEndAt());
 
         meeting.setStatus(MeetingStatus.SCHEDULED);
         meeting.setRoomNumber(generateRoomNumber());
@@ -254,19 +314,25 @@ public class MeetingService {
      */
     @Transactional(readOnly = true)
     public List<MeetingSimpleResDto> readMyMeetings(PrincipalDto principal) {
-        List<Meeting> meetings = meetingJpaRepository.findByHost_IdOrderByStartAtDesc(principal.getId());
+        List<MeetingParticipant> participants =
+                meetingParticipantJpaRepository
+                        .findByUser_IdOrderByMeeting_StartAtDesc(principal.getId());
 
-        return meetings.stream().map(m -> {
-            MeetingSimpleResDto dto = new MeetingSimpleResDto();
-            dto.setMeetingId(m.getId());
-            dto.setType(m.getType());
-            dto.setTitle(m.getTitle());
-            dto.setStartAt(m.getStartAt().toLocalDateTime());
-            dto.setEndAt(m.getEndAt().toLocalDateTime());
-            dto.setRoomNumber(m.getRoomNumber());
-            dto.setStatus(m.getStatus().name());
-            return dto;
-        }).collect(Collectors.toList());
+        return participants.stream()
+                .map(p -> {
+                    Meeting m = p.getMeeting();  // 핵심: Participant → Meeting 꺼내기
+
+                    MeetingSimpleResDto dto = new MeetingSimpleResDto();
+                    dto.setMeetingId(m.getId());
+                    dto.setType(m.getType());
+                    dto.setTitle(m.getTitle());
+                    dto.setStartAt(m.getStartAt().toLocalDateTime());
+                    dto.setEndAt(m.getEndAt().toLocalDateTime());
+                    dto.setRoomNumber(m.getRoomNumber());
+                    dto.setStatus(m.getStatus().name());
+                    return dto;
+                })
+                .collect(Collectors.toList());
     }
 
     /**
@@ -310,6 +376,10 @@ public class MeetingService {
             throw new CustomRestfullException("이미 종료된 회의입니다.", HttpStatus.BAD_REQUEST);
         }
 
+        LocalDateTime now = LocalDateTime.now();
+
+        validateJoinWindow(meeting, now);
+
         LocalDateTime start = meeting.getStartAt().toLocalDateTime();
         LocalDateTime end = meeting.getEndAt().toLocalDateTime();
 
@@ -322,7 +392,7 @@ public class MeetingService {
         dto.setStatus(meeting.getStatus().name());
         dto.setUserId(principal.getId());
         dto.setUserRole(principal.getUserRole());
-        dto.setDisplayName(principal.getName() + " (" + principal.getUserRole() + ")");
+        dto.setDisplayName(principal.getName());
 
         // 🔹 인스턴트 회의면 => 여기서 바로 참가자 등록 + 세션 키 발급
         if ("INSTANT".equals(meeting.getType())) {
@@ -349,6 +419,10 @@ public class MeetingService {
         if (finished || MeetingStatus.FINISHED.equals(meeting.getStatus())) {
             throw new CustomRestfullException("이미 종료된 회의입니다.", HttpStatus.BAD_REQUEST);
         }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        validateJoinWindow(meeting, now);
 
         // 🔹 공통 헬퍼 사용
         return upsertParticipantAndIssueSessionKey(meeting, principal);
