@@ -68,7 +68,7 @@ public class MeetingController {
 
     /**
      * [GET] /api/meetings
-     * 내가 주최한 회의 목록 조회.
+     * 내가 참여자로 있는 회의 목록 조회.
      */
     @GetMapping("")
     public ResponseEntity<List<MeetingSimpleResDto>> readMyMeetings( @AuthenticationPrincipal PrincipalDto principal) {

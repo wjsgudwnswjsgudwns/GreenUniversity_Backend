@@ -8,31 +8,33 @@ import java.sql.Timestamp;
 import java.util.List;
 
 public interface CounselingReservationJpaRepository extends JpaRepository<CounselingReservation, Long> {
-    // 학생 기준, 기간 내 예약 리스트
-    List<CounselingReservation> findByStudent_IdAndSlot_StartAtBetweenOrderBySlot_StartAt(
+    // 학생 기준, 기간 내 예약 리스트 (CANCELED 제외)
+    List<CounselingReservation> findByStudent_IdAndStatusNotAndSlot_StartAtBetweenOrderBySlot_StartAt(
             Integer studentId,
+            CounselingReservationStatus status,
             Timestamp from,
             Timestamp to
     );
 
-    // 학생 기준, 특정 슬롯을 이미 예약 중인지
-    boolean existsBySlot_IdAndStudent_IdAndStatus(
-            Long slotId,
-            Integer studentId,
-            CounselingReservationStatus status
+    // 교수 기준, 기간 내 예약 리스트 (CANCELED 제외)
+    List<CounselingReservation> findBySlot_Professor_IdAndStatusNotAndSlot_StartAtBetweenOrderBySlot_StartAt(
+            Integer professorId,
+            CounselingReservationStatus status,
+            Timestamp from,
+            Timestamp to
     );
 
-    // 학생 기준, 시간 겹치는 예약이 있는지
+    // 학생 기준, 시간 겹치는 예약 여부
     boolean existsByStudent_IdAndStatusAndSlot_StartAtLessThanAndSlot_EndAtGreaterThan(
             Integer studentId,
             CounselingReservationStatus status,
             Timestamp slotEnd,
             Timestamp slotStart
     );
-    // 이 slot에 예약이 하나라도 있는지
+    boolean existsBySlot_IdAndStatus(Long slotId, CounselingReservationStatus status);
+    // 이 slot에 예약이 하나라도 있는지 (삭제 제한용)
     boolean existsBySlot_Id(Long slotId);
 
-    // 특정 슬롯의 예약 전체
+    // 특정 슬롯의 예약 전체 (교수 상세 보기 / 슬롯 상태 계산용)
     List<CounselingReservation> findBySlot_Id(Long slotId);
-
 }

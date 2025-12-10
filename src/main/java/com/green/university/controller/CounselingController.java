@@ -79,8 +79,32 @@ public class CounselingController {
         counselingService.cancelReservation(principal, reservationId);
     }
 
+    /**
+     * 내 상담 예약 목록 조회 (학생용)
+     * GET /api/counseling/my-reservations?from=2025-12-08&to=2025-12-31
+     */
+    @GetMapping("/my-reservations")
+    public List<CounselingReservationResDto> getMyReservations(
+            @AuthenticationPrincipal PrincipalDto principal,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+    ) {
+        return counselingService.getMyReservations(principal, from, to);
+    }
 
     // ================== 교수용 ==================
+    /**
+     * 내 상담 "예약" 목록 조회 (교수용)
+     * GET /api/counseling/professor-reservations?from=2025-12-08&to=2025-12-31
+     */
+    @GetMapping("/professor-reservations")
+    public List<CounselingReservationResDto> getProfessorReservations(
+            @AuthenticationPrincipal PrincipalDto principal,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+    ) {
+        return counselingService.getProfessorReservations(principal, from, to);
+    }
 
     /**
      * 내 상담 슬롯 목록 조회
@@ -108,18 +132,7 @@ public class CounselingController {
         return counselingService.createSingleSlot(principal, dto);
     }
 
-    /**
-     * 주간 패턴으로 반복 슬롯 생성
-     * POST /api/counseling/slots/weekly
-     */
-    @PostMapping("/slots/weekly")
-    @ResponseStatus(HttpStatus.CREATED)
-    public List<CounselingSlotResDto> createWeeklyPattern(
-            @AuthenticationPrincipal PrincipalDto principal,
-            @RequestBody CreateWeeklyPatternReqDto dto
-    ) {
-        return counselingService.createWeeklyPattern(principal, dto);
-    }
+
 
     /**
      * 특정 슬롯에 대한 예약 목록 조회
@@ -159,4 +172,29 @@ public class CounselingController {
         counselingService.deleteSlot(slotId, principal);
         return ResponseEntity.noContent().build(); // 204
     }
+
+    @GetMapping("/student/slots")
+    public List<CounselingSlotResDto> getStudentSlotsForGrid(
+            @AuthenticationPrincipal PrincipalDto principal,
+            @RequestParam Integer professorId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+    ) {
+        return counselingService.getStudentSlotsForGrid(principal, professorId, from, to);
+    }
+
+    @PostMapping("/professor/reservations/{id}/approve")
+    public ResponseEntity<Void> approve(@PathVariable Long id, @AuthenticationPrincipal PrincipalDto principal,@RequestBody CreateMeetingReqDto reqDto) {
+        counselingService.approveReservationByProfessor(principal, id, reqDto);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/professor/reservations/{id}/cancel")
+    public ResponseEntity<Void> cancel(@PathVariable Long id, @AuthenticationPrincipal PrincipalDto principal) {
+        counselingService.cancelReservationByProfessor(principal, id);
+        return ResponseEntity.ok().build();
+    }
 }
+
+
+
