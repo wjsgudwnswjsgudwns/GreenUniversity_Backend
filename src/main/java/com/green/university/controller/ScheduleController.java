@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.green.university.dto.ScheduleDto;
 import com.green.university.dto.ScheduleFormDto;
+import com.green.university.dto.response.PrincipalDto;
 import com.green.university.handler.exception.CustomRestfullException;
 import com.green.university.repository.model.Schedule;
 import com.green.university.service.ScheuleService;
@@ -89,7 +90,12 @@ public class ScheduleController {
         }
 
         // 인증된 사용자 ID 가져오기 (JWT에서)
-        Integer staffId = Integer.parseInt(authentication.getName());
+        Object principalObj = authentication.getPrincipal();
+        if (!(principalObj instanceof PrincipalDto)) {
+            throw new CustomRestfullException("유효하지 않은 인증 정보입니다.", HttpStatus.UNAUTHORIZED);
+        }
+        PrincipalDto principal = (PrincipalDto) principalObj;
+        Integer staffId = principal.getId();
 
         scheuleService.createSchedule(staffId, scheduleFormDto);
 
