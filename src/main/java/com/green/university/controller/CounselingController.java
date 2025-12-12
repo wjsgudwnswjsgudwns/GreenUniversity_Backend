@@ -194,6 +194,18 @@ public class CounselingController {
         counselingService.cancelReservationByProfessor(principal, id);
         return ResponseEntity.ok().build();
     }
+
+    /**
+     * 교수-학생 간 완료된 상담 내역 조회
+     * GET /api/counseling/professor/{professorId}/student/{studentId}/completed
+     */
+    @GetMapping("/professor/{professorId}/student/{studentId}/completed")
+    public List<CounselingReservationResDto> getCompletedCounselings(
+            @PathVariable Integer professorId,
+            @PathVariable Integer studentId
+    ) {
+        return counselingService.getCompletedCounselingsByProfessorAndStudent(professorId, studentId);
+    }
 }
 
 

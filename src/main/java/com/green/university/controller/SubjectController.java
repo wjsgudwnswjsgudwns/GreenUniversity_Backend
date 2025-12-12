@@ -42,6 +42,15 @@ public class SubjectController {
 	@Autowired
 	private ProfessorService professorService;
 
+    /**
+     * 전체 과목 목록 조회 (필터링용)
+     */
+    @GetMapping("/all")
+    public ResponseEntity<?> getAllSubjects() {
+        List<SubjectDto> subjectList = subjectService.readSubjectList();
+        return ResponseEntity.ok(subjectList);
+    }
+
 	// 모든 강의 조회 (모든 연도-학기에 대해서)
     @GetMapping("/list/{page}")
     public ResponseEntity<?> readSubjectList(@PathVariable Integer page) {

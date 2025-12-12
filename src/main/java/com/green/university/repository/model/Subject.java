@@ -1,13 +1,6 @@
 package com.green.university.repository.model;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 
@@ -17,6 +10,8 @@ import lombok.Data;
 import com.green.university.repository.model.Department;
 import com.green.university.repository.model.Professor;
 import com.green.university.repository.model.Room;
+
+import java.util.List;
 
 @Data
 @Entity
@@ -82,4 +77,6 @@ public class Subject {
     // 실제 수강 신청 현재 인원
     @Column(name = "num_of_student")
     private Integer numOfStudent;
+
+
 }

@@ -1,19 +1,14 @@
 package com.green.university.repository.model;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.*;
 
 
 import lombok.Data;
 
 // 추가 import: Department 엔티티를 참조하기 위해 필요
 import com.green.university.repository.model.Department;
+
+import java.util.List;
 
 @Data
 @Entity
@@ -69,4 +64,6 @@ public class Student {
 
     @Column(name = "graduation_date")
     private java.sql.Date graduationDate;
+
+
 }

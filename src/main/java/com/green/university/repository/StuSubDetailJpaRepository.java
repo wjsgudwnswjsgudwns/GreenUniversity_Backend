@@ -25,4 +25,12 @@ public interface StuSubDetailJpaRepository extends JpaRepository<StuSubDetail,In
             @Param("studentId") Integer studentId,
             @Param("year") Integer year,
             @Param("semester") Integer semester);
+
+    @Query("SELECT ssd FROM StuSubDetail ssd " +
+            "JOIN FETCH ssd.student s " +
+            "JOIN FETCH s.department d " +
+            "JOIN FETCH d.college " +
+            "JOIN FETCH ssd.subject sub " +
+            "JOIN FETCH sub.professor")
+    List<StuSubDetail> findAllWithStudentAndSubject();
 }

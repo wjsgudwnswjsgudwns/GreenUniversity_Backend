@@ -44,4 +44,11 @@ public interface CounselingReservationJpaRepository extends JpaRepository<Counse
             Timestamp start,
             Timestamp end
     );
+
+    List<CounselingReservation> findBySlot_Professor_IdAndStudent_IdAndStatusAndSlot_EndAtLessThanOrderBySlot_StartAtDesc(
+            Integer professorId,
+            Integer studentId,
+            CounselingReservationStatus status,
+            Timestamp endAt
+    );
 }

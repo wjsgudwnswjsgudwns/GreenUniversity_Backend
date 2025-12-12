@@ -4,7 +4,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
+import com.green.university.dto.response.DepartmentResponseDto;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -208,11 +210,13 @@ public class AdminController {
      * GET /api/admin/departments/all
      */
     @GetMapping("/departments/all")
-    public ResponseEntity<List<Department>> getAllDepartments() {
+    public ResponseEntity<List<DepartmentResponseDto>> getAllDepartments() {
         List<Department> departments = adminService.readDepartment();
-        return ResponseEntity.ok(departments);
+        List<DepartmentResponseDto> dtoList = departments.stream()
+                .map(DepartmentResponseDto::fromEntity)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(dtoList);
     }
-
     /**
      * 모든 단과대 목록 조회 (인증된 사용자용)
      * GET /api/admin/colleges/all

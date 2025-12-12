@@ -731,4 +731,28 @@ public class CounselingService {
                 r.getId()
         );
     }
+
+
+    /**
+     * 교수-학생 간 완료된 상담 내역 조회 (슬롯 시간 기준)
+     */
+    @Transactional(readOnly = true)
+    public List<CounselingReservationResDto> getCompletedCounselingsByProfessorAndStudent(
+            Integer professorId,
+            Integer studentId
+    ) {
+        // 과거 시간대의 예약 중 APPROVED 상태인 것만 조회
+        LocalDateTime now = LocalDateTime.now();
+        Timestamp nowTs = Timestamp.valueOf(now);
+
+        List<CounselingReservation> reservations = reservationRepo
+                .findBySlot_Professor_IdAndStudent_IdAndStatusAndSlot_EndAtLessThanOrderBySlot_StartAtDesc(
+                        professorId,
+                        studentId,
+                        CounselingReservationStatus.APPROVED,
+                        nowTs
+                );
+
+        return mapReservationsToDtos(reservations);
+    }
 }

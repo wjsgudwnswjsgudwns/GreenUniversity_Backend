@@ -1,223 +1,144 @@
 package com.green.university.controller;
 
-import java.util.List;
-
+import com.green.university.dto.AIResponseDTO;
+import com.green.university.repository.model.AICounseling;
 import com.green.university.service.AICounselingService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import com.green.university.dto.counseling.*;
-import com.green.university.service.DropoutRiskService;
+import java.time.LocalDateTime;
+import java.util.List;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
-/**
- * 상담 관리 API 컨트롤러
- */
-@Slf4j
 @RestController
-@RequestMapping("/api/counseling")
+@RequestMapping("/api/ai-counseling")
 @RequiredArgsConstructor
 public class AICounselingController {
 
-    private final AICounselingService counselingService;
-    private final DropoutRiskService dropoutRiskService;
+    private final AICounselingService aiCounselingService;
 
     /**
-     * 상담 등록 (교수, 직원)
-     */
-    @PostMapping
-    @PreAuthorize("hasAnyRole('PROFESSOR', 'STAFF')")
-    public ResponseEntity<CounselingResponseDTO> createCounseling(
-            @RequestBody CounselingCreateDTO dto) {
-        try {
-            log.info("상담 등록 요청: 학생ID={}, 상담자ID={}",
-                    dto.getStudentId(), dto.getCounselorId());
-
-            CounselingResponseDTO response = counselingService.createCounseling(dto);
-
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (Exception e) {
-            log.error("상담 등록 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    /**
-     * 학생 상담 기록 조회 (학생 본인, 교수, 직원)
+     * 학생의 상담 일정 조회
      */
     @GetMapping("/student/{studentId}")
-    @PreAuthorize("hasAnyRole('STUDENT', 'PROFESSOR', 'STAFF')")
-    public ResponseEntity<List<CounselingResponseDTO>> getStudentCounselings(
+    public ResponseEntity<?> getStudentCounselings(@PathVariable Integer studentId) {
+        List<AICounseling> counselings = aiCounselingService.getStudentCounselings(studentId);
+        return ResponseEntity.ok(new AIResponseDTO<>(1, "학생 상담 일정 조회 성공", counselings));
+    }
+
+    /**
+     * 학생의 예정된 상담 일정 조회 (미완료만)
+     */
+    @GetMapping("/student/{studentId}/upcoming")
+    public ResponseEntity<?> getUpcomingCounselings(@PathVariable Integer studentId) {
+        List<AICounseling> counselings = aiCounselingService.getUpcomingCounselings(studentId);
+        return ResponseEntity.ok(new AIResponseDTO<>(1, "예정된 상담 일정 조회 성공", counselings));
+    }
+
+    /**
+     * 교수의 상담 일정 조회
+     */
+    @GetMapping("/professor/{professorId}")
+    public ResponseEntity<?> getProfessorCounselings(@PathVariable Integer professorId) {
+        List<AICounseling> counselings = aiCounselingService.getProfessorCounselings(professorId);
+        return ResponseEntity.ok(new AIResponseDTO<>(1, "교수 상담 일정 조회 성공", counselings));
+    }
+
+    /**
+     * 과목별 상담 일정 조회
+     */
+    @GetMapping("/subject/{subjectId}")
+    public ResponseEntity<?> getSubjectCounselings(@PathVariable Integer subjectId) {
+        List<AICounseling> counselings = aiCounselingService.getSubjectCounselings(subjectId);
+        return ResponseEntity.ok(new AIResponseDTO<>(1, "과목별 상담 일정 조회 성공", counselings));
+    }
+
+    /**
+     * 교수-학생 간 상담 내역 조회
+     */
+    @GetMapping("/professor/{professorId}/student/{studentId}")
+    public ResponseEntity<?> getCounselingsByProfessorAndStudent(
+            @PathVariable Integer professorId,
             @PathVariable Integer studentId) {
-        try {
-            List<CounselingResponseDTO> counselings =
-                    counselingService.getStudentCounselings(studentId);
-
-            return ResponseEntity.ok(counselings);
-        } catch (Exception e) {
-            log.error("학생 상담 기록 조회 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        List<AICounseling> counselings = aiCounselingService.getCounselingsByProfessorAndStudent(professorId, studentId);
+        return ResponseEntity.ok(new AIResponseDTO<>(1, "교수-학생 상담 내역 조회 성공", counselings));
     }
 
     /**
-     * 상담자별 상담 기록 조회 (교수, 직원)
+     * 상담 일정 생성
      */
-    @GetMapping("/counselor/{counselorId}")
-    @PreAuthorize("hasAnyRole('PROFESSOR', 'STAFF')")
-    public ResponseEntity<List<CounselingResponseDTO>> getCounselorCounselings(
-            @PathVariable Integer counselorId,
-            @RequestParam String counselorType) {
-        try {
-            List<CounselingResponseDTO> counselings =
-                    counselingService.getCounselorCounselings(counselorId, counselorType);
-
-            return ResponseEntity.ok(counselings);
-        } catch (Exception e) {
-            log.error("상담자 상담 기록 조회 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+    @PostMapping
+    public ResponseEntity<?> createCounseling(@RequestBody AICounseling counseling) {
+        AICounseling created = aiCounselingService.createCounseling(counseling);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new AIResponseDTO<>(1, "상담 일정 생성 성공", created));
     }
 
     /**
-     * 상담 상세 조회
+     * 상담 기록 + Gemini AI 분석
      */
-    @GetMapping("/{counselingId}")
-    @PreAuthorize("hasAnyRole('STUDENT', 'PROFESSOR', 'STAFF')")
-    public ResponseEntity<CounselingResponseDTO> getCounselingDetail(
-            @PathVariable Integer counselingId) {
-        try {
-            CounselingResponseDTO counseling =
-                    counselingService.getCounselingDetail(counselingId);
-
-            return ResponseEntity.ok(counseling);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            log.error("상담 상세 조회 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+    @PostMapping("/analyze")
+    public ResponseEntity<?> createCounselingWithAnalysis(@RequestBody CreateCounselingWithAnalysisRequest request) {
+        AICounseling counseling = aiCounselingService.createCounselingWithAnalysis(
+                request.getStudentId(),
+                request.getProfessorId(),
+                request.getSubjectId(),
+                request.getScheduledAt(),
+                request.getCounselingContent()
+        );
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new AIResponseDTO<>(1, "상담 분석 완료", counseling));
     }
 
     /**
-     * 고위험 상담 목록 조회 (직원)
+     * 상담 내용 작성 및 완료 처리
      */
-    @GetMapping("/high-risk")
-    @PreAuthorize("hasRole('STAFF')")
-    public ResponseEntity<List<CounselingResponseDTO>> getHighRiskCounselings(
-            @RequestParam(defaultValue = "70") Integer minScore) {
-        try {
-            List<CounselingResponseDTO> counselings =
-                    counselingService.getHighRiskCounselings(minScore);
-
-            return ResponseEntity.ok(counselings);
-        } catch (Exception e) {
-            log.error("고위험 상담 조회 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+    @PutMapping("/{counselingId}/complete")
+    public ResponseEntity<?> completeCounseling(
+            @PathVariable Integer counselingId,
+            @RequestBody CompleteCounselingRequest request) {
+        AICounseling completed = aiCounselingService.completeCounseling(counselingId, request.getCounselingContent());
+        return ResponseEntity.ok(new AIResponseDTO<>(1, "상담 완료 처리 성공", completed));
     }
 
     /**
-     * 통합 위험도 조회 (학생)
+     * 상담 일정 수정
      */
-    @GetMapping("/risk/student/{studentId}")
-    @PreAuthorize("hasAnyRole('STUDENT', 'PROFESSOR', 'STAFF')")
-    public ResponseEntity<DropoutRiskResponseDTO> getStudentRisk(
-            @PathVariable Integer studentId,
-            @RequestParam Integer year,
-            @RequestParam Integer semester) {
-        try {
-            DropoutRiskResponseDTO risk =
-                    dropoutRiskService.getStudentRiskDetail(studentId, year, semester);
-
-            return ResponseEntity.ok(risk);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            log.error("학생 위험도 조회 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+    @PutMapping("/{counselingId}")
+    public ResponseEntity<?> updateCounseling(
+            @PathVariable Integer counselingId,
+            @RequestBody UpdateCounselingRequest request) {
+        AICounseling updated = aiCounselingService.updateCounseling(counselingId, request.getScheduledAt());
+        return ResponseEntity.ok(new AIResponseDTO<>(1, "상담 일정 수정 성공", updated));
     }
 
     /**
-     * 고위험 학생 목록 조회 (직원)
+     * 상담 일정 삭제
      */
-    @GetMapping("/risk/high-risk-students")
-    @PreAuthorize("hasRole('STAFF')")
-    public ResponseEntity<List<RiskStudentListDTO>> getHighRiskStudents(
-            @RequestParam Integer year,
-            @RequestParam Integer semester,
-            @RequestParam(defaultValue = "60") Integer minScore) {
-        try {
-            List<RiskStudentListDTO> students =
-                    dropoutRiskService.getHighRiskStudents(year, semester, minScore);
-
-            return ResponseEntity.ok(students);
-        } catch (Exception e) {
-            log.error("고위험 학생 목록 조회 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+    @DeleteMapping("/{counselingId}")
+    public ResponseEntity<?> deleteCounseling(@PathVariable Integer counselingId) {
+        aiCounselingService.deleteCounseling(counselingId);
+        return ResponseEntity.ok(new AIResponseDTO<>(1, "상담 일정 삭제 성공", null));
     }
 
-    /**
-     * 학과별 위험도 통계 (교수, 직원)
-     */
-    @GetMapping("/risk/statistics/department/{deptId}")
-    @PreAuthorize("hasAnyRole('PROFESSOR', 'STAFF')")
-    public ResponseEntity<RiskStatisticsDTO> getDepartmentStatistics(
-            @PathVariable Integer deptId,
-            @RequestParam Integer year,
-            @RequestParam Integer semester) {
-        try {
-            RiskStatisticsDTO statistics =
-                    dropoutRiskService.getDepartmentRiskStatistics(deptId, year, semester);
-
-            return ResponseEntity.ok(statistics);
-        } catch (Exception e) {
-            log.error("학과 통계 조회 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+    // Request DTOs
+    @lombok.Data
+    static class CreateCounselingWithAnalysisRequest {
+        private Integer studentId;
+        private Integer professorId;
+        private Integer subjectId;
+        private LocalDateTime scheduledAt;
+        private String counselingContent;
     }
 
-    /**
-     * 성적 기반 위험도 수동 업데이트 (테스트용)
-     */
-    @PostMapping("/risk/update-grade")
-    @PreAuthorize("hasRole('STAFF')")
-    public ResponseEntity<String> updateGradeRisk(
-            @RequestParam Integer studentId,
-            @RequestParam Integer year,
-            @RequestParam Integer semester) {
-        try {
-            dropoutRiskService.updateGradeRisk(studentId, year, semester);
-            return ResponseEntity.ok("성적 위험도 업데이트 완료");
-        } catch (Exception e) {
-            log.error("성적 위험도 업데이트 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("업데이트 실패: " + e.getMessage());
-        }
+    @lombok.Data
+    static class CompleteCounselingRequest {
+        private String counselingContent;
     }
 
-    /**
-     * 출석 기반 위험도 수동 업데이트 (테스트용)
-     */
-    @PostMapping("/risk/update-attendance")
-    @PreAuthorize("hasRole('STAFF')")
-    public ResponseEntity<String> updateAttendanceRisk(
-            @RequestParam Integer studentId,
-            @RequestParam Integer year,
-            @RequestParam Integer semester) {
-        try {
-            dropoutRiskService.updateAttendanceRisk(studentId, year, semester);
-            return ResponseEntity.ok("출석 위험도 업데이트 완료");
-        } catch (Exception e) {
-            log.error("출석 위험도 업데이트 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("업데이트 실패: " + e.getMessage());
-        }
+    @lombok.Data
+    static class UpdateCounselingRequest {
+        private LocalDateTime scheduledAt;
     }
 }

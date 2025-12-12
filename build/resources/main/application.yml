@@ -33,7 +33,7 @@ spring:
   # Configure JPA/Hibernate settings
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     properties:
       hibernate:
         format_sql: true
@@ -51,7 +51,8 @@ spring:
       enabled: always
 
 gemini:
-  api: key:AIzaSyCuwSZWm9xIUMPzEQoJg4nDbLFA
+  api:
+    key: AIzaSyCuwJczfx9WSZWm9xIUMPzEQoJg4nDbLFA
 
   # Removed mybatis configuration since the project now uses Spring Data JPA
 

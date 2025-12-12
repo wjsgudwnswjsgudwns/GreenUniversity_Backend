@@ -55,6 +55,7 @@ public class JwtUtil {
     public String extractUserId(String token) {
         return getClaims(token).getSubject();
     }
+
     public String extractRole(String token) {
         return getClaims(token).get("role", String.class);
     }
@@ -62,9 +63,25 @@ public class JwtUtil {
     public boolean validateToken(String token) {
         try {
             Claims claims = getClaims(token);
-            return !claims.getExpiration().before(new Date());
+            Date expiration = claims.getExpiration();
+            Date now = new Date();
+
+            log.debug("Token expiration: {}", expiration);
+            log.debug("Current time: {}", now);
+            log.debug("Is expired: {}", expiration.before(now));
+
+            return !expiration.before(now);
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            log.error("토큰이 만료되었습니다: {}", e.getMessage());
+            return false;
+        } catch (io.jsonwebtoken.MalformedJwtException e) {
+            log.error("잘못된 형식의 토큰입니다: {}", e.getMessage());
+            return false;
+        } catch (io.jsonwebtoken.security.SignatureException e) {
+            log.error("토큰 서명이 유효하지 않습니다: {}", e.getMessage());
+            return false;
         } catch (Exception e) {
-            log.error("토큰 검증 실패: {}", e.getMessage());
+            log.error("토큰 검증 실패: {}", e.getMessage(), e);
             return false;
         }
     }
@@ -78,8 +95,35 @@ public class JwtUtil {
     }
 
     public User findUserByToken(String token) {
-        Integer userId = Integer.valueOf(extractUserId(token));
-        return userJpaRepository.findById(userId).orElseThrow(() ->
-                new CustomRestfullException("유저 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+        try {
+            String userIdStr = extractUserId(token);
+            log.info("Extracting user from token, userId string: {}", userIdStr);
+
+            Integer userId = Integer.valueOf(userIdStr);
+            log.info("Converted to Integer: {}", userId);
+
+            User user = userJpaRepository.findById(userId)
+                    .orElseThrow(() -> {
+                        log.error("User not found in DB: userId={}", userId);
+                        return new CustomRestfullException(
+                                "유저 정보를 찾을 수 없습니다. (userId: " + userId + ")",
+                                HttpStatus.NOT_FOUND
+                        );
+                    });
+
+            log.info("User found: id={}, email={}, role={}",
+                    user.getId(), user.getUserRole());
+
+            return user;
+        } catch (NumberFormatException e) {
+            log.error("UserId 변환 실패: token subject is not a valid integer", e);
+            throw new CustomRestfullException(
+                    "토큰의 사용자 ID 형식이 올바르지 않습니다.",
+                    HttpStatus.BAD_REQUEST
+            );
+        } catch (Exception e) {
+            log.error("findUserByToken 실패: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 }

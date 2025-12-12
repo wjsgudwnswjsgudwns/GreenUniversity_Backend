@@ -40,4 +40,5 @@ public interface StuSubJpaRepository extends JpaRepository<StuSub, Integer> {
     List<StuSub> findByStudentId(Integer studentId);
 
     List<StuSub> findByStudentIdAndSubject_SubYearAndSubject_SemesterAndSubject_Type(Integer studentId, Integer subYear, Integer semester, String type);
+
 }
