@@ -33,4 +33,16 @@ public interface StuSubDetailJpaRepository extends JpaRepository<StuSubDetail,In
             "JOIN FETCH ssd.subject sub " +
             "JOIN FETCH sub.professor")
     List<StuSubDetail> findAllWithStudentAndSubject();
+
+    /**
+     * 학생 ID로 수강 과목 조회 (FETCH JOIN으로 N+1 문제 해결)
+     */
+    @Query("SELECT s FROM StuSubDetail s " +
+            "LEFT JOIN FETCH s.student st " +
+            "LEFT JOIN FETCH st.department d " +
+            "LEFT JOIN FETCH s.subject sub " +
+            "LEFT JOIN FETCH sub.professor " +
+            "WHERE s.studentId = :studentId")
+    List<StuSubDetail> findByStudentIdWithRelations(@Param("studentId") Integer studentId);
+
 }

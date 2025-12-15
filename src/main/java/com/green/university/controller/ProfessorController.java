@@ -115,6 +115,21 @@ public class ProfessorController {
     }
 
     /**
+     * ✅ 해당 과목의 실제 수강신청한 학생만 조회 (stu_sub_tb 기준)
+     * 예비 수강신청이 아닌 실제 수강신청한 학생만 반환
+     */
+    @GetMapping("/subject/{subjectId}/enrolled")
+    public ResponseEntity<Map<String, Object>> enrolledStudentList(@PathVariable Integer subjectId) {
+        List<StuSubResponseDto> studentList = professorService.selectEnrolledStudentsBySubjectId(subjectId);
+        Subject subject = professorService.selectSubjectById(subjectId);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("studentList", studentList);
+        body.put("subject", subject);
+        return ResponseEntity.ok(body);
+    }
+
+    /**
      * 출결 및 성적 기입 페이지
      */
     @GetMapping("/subject/{subjectId}/{studentId}")

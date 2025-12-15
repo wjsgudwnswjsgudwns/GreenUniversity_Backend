@@ -271,4 +271,48 @@ public class ProfessorService {
         return amount;
     }
 
+    /**
+     * 특정 과목의 실제 수강신청한 학생 목록 조회
+     * stu_sub_tb 기준 (예비 수강신청 제외)
+     *
+     * @param subjectId 과목 ID
+     * @return 수강신청한 학생 DTO 리스트
+     */
+    public List<StuSubResponseDto> selectEnrolledStudentsBySubjectId(Integer subjectId) {
+        System.out.println("=== 수강신청 학생 조회 시작 ===");
+        System.out.println("과목 ID: " + subjectId);
+
+        // ✅ 수정: findEnrolledBySubjectId 사용
+        List<StuSub> enrollments = stuSubJpaRepository.findEnrolledBySubjectId(subjectId);
+
+        System.out.println("조회된 학생 수: " + enrollments.size());
+
+        for (StuSub enrollment : enrollments) {
+            System.out.println("Student ID: " + enrollment.getStudentId() +
+                    ", Enrollment Type: " + enrollment.getEnrollmentType());
+        }
+
+        List<StuSubResponseDto> studentList = new ArrayList<>();
+
+        for (StuSub enrollment : enrollments) {
+            if (enrollment.getStudent() != null) {
+                Student student = enrollment.getStudent();
+
+                StuSubResponseDto dto = new StuSubResponseDto();
+                dto.setStudentId(student.getId());
+                dto.setStudentName(student.getName());
+
+                if (student.getDepartment() != null) {
+                    dto.setDeptName(student.getDepartment().getName());
+                } else {
+                    dto.setDeptName("-");
+                }
+
+                studentList.add(dto);
+            }
+        }
+
+        return studentList;
+    }
+
 }
