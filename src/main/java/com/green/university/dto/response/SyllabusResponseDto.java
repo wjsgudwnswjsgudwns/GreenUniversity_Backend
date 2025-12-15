@@ -10,7 +10,10 @@ import lombok.NoArgsConstructor;
 public class SyllabusResponseDto {
     private Integer subjectId;
     private String subjectName;
+    private Integer professorId;
     private String professorName;
+
+    private String collegeName;
 
     private String classTime;
     private String roomId;

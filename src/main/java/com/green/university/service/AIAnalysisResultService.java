@@ -3,17 +3,12 @@ package com.green.university.service;
 import com.green.university.repository.AIAnalysisResultRepository;
 import com.green.university.repository.StuSubDetailJpaRepository;
 import com.green.university.repository.TuitionJpaRepository;
-import com.green.university.repository.StudentJpaRepository;
-import com.green.university.repository.SubjectJpaRepository;
-import com.green.university.repository.NotificationJpaRepository;
 import com.green.university.repository.model.AIAnalysisResult;
 import com.green.university.repository.model.AICounseling;
 import com.green.university.repository.model.StuSubDetail;
 import com.green.university.repository.model.Tuition;
-import com.green.university.repository.model.Student;
-import com.green.university.repository.model.Subject;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,7 +19,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AIAnalysisResultService {
@@ -32,11 +26,12 @@ public class AIAnalysisResultService {
     private final AIAnalysisResultRepository aiAnalysisResultRepository;
     private final StuSubDetailJpaRepository stuSubDetailRepository;
     private final TuitionJpaRepository tuitionRepository;
-    private final AICounselingService aiCounselingService;
-    private final NotificationService notificationService;
-    private final StudentJpaRepository studentRepository;
-    private final SubjectJpaRepository subjectRepository;
-    private final NotificationJpaRepository notificationRepo;
+//    private final AICounselingService aiCounselingService;
+
+    private final AICounselingQueryService counselingQueryService;
+
+    @Autowired
+    private GeminiService geminiService;
 
     /**
      * 학생의 분석 결과 조회 - DB에서 조회
@@ -117,6 +112,17 @@ public class AIAnalysisResultService {
 
         // 종합 위험도 계산
         result.setOverallRisk(calculateOverallRisk(result));
+
+        // RISK 또는 CRITICAL인 경우 AI 코멘트 생성
+        if ("RISK".equals(result.getOverallRisk()) || "CRITICAL".equals(result.getOverallRisk())) {
+            try {
+                String aiComment = geminiService.generateRiskComment(result, enrollment);
+                result.setAnalysisDetail(aiComment);
+            } catch (Exception e) {
+                System.err.println("AI 코멘트 생성 실패: " + e.getMessage());
+                result.setAnalysisDetail(null);
+            }
+        }
 
         // DB에 저장
         return aiAnalysisResultRepository.save(result);
@@ -243,33 +249,28 @@ public class AIAnalysisResultService {
         result.setTuitionStatus(analyzeTuition(studentId, year, semester));
         result.setCounselingStatus(analyzeCounseling(studentId));
 
-        // 이전 위험도 저장 (알림 발송 여부 판단용)
-        String previousRisk = result.getOverallRisk();
-
         // 종합 위험도 계산
-        String newRisk = calculateOverallRisk(result);
-        result.setOverallRisk(newRisk);
+        result.setOverallRisk(calculateOverallRisk(result));
 
-        AIAnalysisResult saved = aiAnalysisResultRepository.save(result);
+        // RISK 또는 CRITICAL인 경우 AI 코멘트 생성
+        if ("RISK".equals(result.getOverallRisk()) || "CRITICAL".equals(result.getOverallRisk())) {
+            try {
+                // StuSubDetail 조회
+                StuSubDetail detail = stuSubDetailRepository
+                        .findByStudentIdAndSubjectId(studentId, subjectId)
+                        .orElse(null);
 
-        log.info("위험도 분석 결과: 학생 ID={}, 과목 ID={}, 이전 위험도={}, 새 위험도={}", 
-                studentId, subjectId, previousRisk, newRisk);
-
-        // 위험도가 RISK 또는 CRITICAL인 경우 알림 발송
-        // 매일 자동 검사 시 위험/심각 상태면 알림 발송 (상태 변경 여부 무관)
-        // 단, 하루에 한 번만 알림 발송 (중복 방지)
-        // 주의(CAUTION) 이하로 호전되면 알림 안 감
-        if (newRisk.equals("RISK") || newRisk.equals("CRITICAL")) {
-            log.info("위험 알림 발송: 학생 ID={}, 과목 ID={}, 위험도={}", 
-                    studentId, subjectId, newRisk);
-            sendRiskNotifications(saved, newRisk);
+                String aiComment = geminiService.generateRiskComment(result, detail);
+                result.setAnalysisDetail(aiComment);
+            } catch (Exception e) {
+                System.err.println("AI 코멘트 생성 실패: " + e.getMessage());
+                result.setAnalysisDetail(null);
+            }
         } else {
-            // 주의 이하로 호전된 경우 알림 안 감
-            log.debug("위험도가 NORMAL 또는 CAUTION: 학생 ID={}, 과목 ID={}, 위험도={}", 
-                    studentId, subjectId, newRisk);
+            result.setAnalysisDetail(null); // NORMAL, CAUTION은 코멘트 없음
         }
 
-        return saved;
+        return aiAnalysisResultRepository.save(result);
     }
 
     /**
@@ -431,13 +432,13 @@ public class AIAnalysisResultService {
     private String analyzeCounseling(Integer studentId) {
         LocalDateTime threeMonthsAgo = LocalDateTime.now().minusMonths(3);
 
-        List<AICounseling> counselings = aiCounselingService
-                .getCompletedCounselingsForAnalysis(studentId);
+        List<AICounseling> counselings =
+                counselingQueryService.getCompletedCounselingsForAnalysis(studentId);
 
         List<AICounseling> recentCounselings = counselings.stream()
                 .filter(c -> c.getCompletedAt() != null &&
                         c.getCompletedAt().isAfter(threeMonthsAgo))
-                .collect(Collectors.toList());
+                .toList();
 
         if (recentCounselings.isEmpty()) {
             return "NORMAL";
@@ -445,18 +446,15 @@ public class AIAnalysisResultService {
 
         int frequencyScore = calculateFrequencyScore(recentCounselings.size());
         int trendScore = calculateTrendScore(recentCounselings);
+
         int totalScore = (frequencyScore * 30 + trendScore * 70) / 100;
 
-        if (totalScore >= 80) {
-            return "CRITICAL";
-        } else if (totalScore >= 60) {
-            return "RISK";
-        } else if (totalScore >= 40) {
-            return "CAUTION";
-        } else {
-            return "NORMAL";
-        }
+        if (totalScore >= 80) return "CRITICAL";
+        if (totalScore >= 60) return "RISK";
+        if (totalScore >= 40) return "CAUTION";
+        return "NORMAL";
     }
+
 
     private int calculateFrequencyScore(int counselingCount) {
         if (counselingCount >= 10) {
@@ -593,100 +591,6 @@ public class AIAnalysisResultService {
             return "CAUTION";
         } else {
             return "NORMAL";
-        }
-    }
-
-    /**
-     * 위험도가 RISK 또는 CRITICAL일 때 알림 발송
-     * 하루에 한 번만 알림 발송 (중복 방지)
-     */
-    private void sendRiskNotifications(AIAnalysisResult result, String riskLevel) {
-        try {
-            Integer studentId = result.getStudentId();
-            Integer subjectId = result.getSubjectId();
-
-            if (studentId == null || subjectId == null) {
-                log.warn("학생 ID 또는 과목 ID가 null입니다. 알림 발송 건너뜀.");
-                return;
-            }
-
-            // 학생 정보 조회
-            Student student = studentRepository.findById(studentId)
-                    .orElse(null);
-            if (student == null) {
-                log.warn("학생을 찾을 수 없습니다. ID: {}", studentId);
-                return;
-            }
-
-            // 과목 정보 조회 (교수 정보 포함)
-            Subject subject = subjectRepository.findById(subjectId)
-                    .orElse(null);
-            if (subject == null) {
-                log.warn("과목을 찾을 수 없습니다. ID: {}", subjectId);
-                return;
-            }
-
-            if (subject.getProfessor() == null) {
-                log.warn("과목에 교수 정보가 없습니다. 과목 ID: {}", subjectId);
-                return;
-            }
-
-            String studentName = student.getName();
-            String subjectName = subject.getName();
-            Integer professorId = subject.getProfessor().getId();
-            String professorName = subject.getProfessor().getName();
-
-            String riskLabel = riskLevel.equals("CRITICAL") ? "심각" : "위험";
-
-            // 오늘 이미 알림을 보냈는지 확인 (중복 방지)
-            // 학생에게는: 오늘 STUDENT_RISK_ALERT 타입의 알림이 있는지 확인
-            boolean studentNotifiedToday = notificationRepo.existsByUserIdAndTypeAndToday(
-                    studentId, "STUDENT_RISK_ALERT");
-            
-            // 교수에게는: 오늘 PROFESSOR_RISK_ALERT 타입의 알림이 있는지 확인
-            // 단, 같은 학생-과목 조합에 대해서만 확인 (메시지에 학생명과 과목명 포함)
-            boolean professorNotifiedToday = notificationRepo.existsByUserIdAndTypeAndToday(
-                    professorId, "PROFESSOR_RISK_ALERT");
-
-            // 학생에게 알림 (오늘 아직 안 보낸 경우)
-            if (!studentNotifiedToday) {
-                String studentMessage = String.format(
-                        "%s 과목에서 %s 상태가 감지되었습니다. 상담을 받으시기 바랍니다.",
-                        subjectName,
-                        riskLabel
-                );
-                notificationService.createNotification(
-                        studentId,
-                        "STUDENT_RISK_ALERT",
-                        studentMessage,
-                        null
-                );
-                log.info("학생에게 위험 알림 발송: 학생={}, 과목={}, 위험도={}", studentName, subjectName, riskLevel);
-            } else {
-                log.info("학생에게 오늘 이미 알림을 보냈으므로 건너뜀: 학생 ID={}", studentId);
-            }
-
-            // 교수에게 알림
-            // 같은 교수가 여러 학생의 위험 알림을 받을 수 있으므로,
-            // 각 학생-과목 조합마다 알림을 보냄
-            // 메시지에 학생명과 과목명을 포함하여 구분 가능
-            String professorMessage = String.format(
-                    "%s 학생이 %s 과목에서 %s 상태입니다. 상담이 필요합니다.",
-                    studentName,
-                    subjectName,
-                    riskLabel
-            );
-            notificationService.createNotification(
-                    professorId,
-                    "PROFESSOR_RISK_ALERT",
-                    professorMessage,
-                    null
-            );
-            log.info("교수에게 위험 알림 발송: 교수={}, 학생={}, 과목={}, 위험도={}", 
-                    professorName, studentName, subjectName, riskLevel);
-
-        } catch (Exception e) {
-            log.error("위험 알림 발송 실패: " + e.getMessage(), e);
         }
     }
 }

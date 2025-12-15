@@ -65,5 +65,11 @@ public class Student {
     @Column(name = "graduation_date")
     private java.sql.Date graduationDate;
 
+    @ManyToOne
+    @JoinColumn(name = "advisor_id")
+    private Professor advisor;
+
+    @Column(name = "advisor_id", insertable = false, updatable = false)
+    private Integer advisorId;
 
 }

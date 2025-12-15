@@ -8,6 +8,7 @@ import com.green.university.repository.model.Student;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -29,4 +30,34 @@ public interface StudentJpaRepository extends JpaRepository<Student, Integer> {
     // 학번으로 조회 (페이징)
     @Query("SELECT s FROM Student s WHERE s.id = :studentId")
     Page<Student> findById(@Param("studentId") Integer studentId, Pageable pageable);
+
+    /**
+     * 특정 교수를 담당 교수로 하는 학생 수를 조회합니다.
+     */
+    long countByAdvisorId(Integer advisorId);
+
+    /**
+     * 담당 교수가 없는 모든 학생을 조회합니다.
+     */
+    List<Student> findByAdvisorIsNull();
+
+    /**
+     * 특정 학과에 소속되어 있고 담당 교수가 없는 학생들을 조회합니다.
+     */
+    List<Student> findByDeptIdAndAdvisorIsNull(Integer deptId);
+
+    /**
+     * 특정 학과에 소속되어 있고 담당 교수가 있는 학생들을 조회합니다.
+     */
+    List<Student> findByDeptIdAndAdvisorIsNotNull(Integer deptId);
+
+    /**
+     * 특정 학과의 모든 학생을 조회합니다.
+     */
+    List<Student> findByDeptId(Integer deptId);
+
+    /**
+     * 특정 교수를 담당 교수로 하는 학생 목록을 조회합니다.
+     */
+    List<Student> findByAdvisorId(Integer advisorId);
 }

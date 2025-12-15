@@ -27,22 +27,26 @@ public interface StuSubDetailJpaRepository extends JpaRepository<StuSubDetail,In
             @Param("semester") Integer semester);
 
     @Query("SELECT ssd FROM StuSubDetail ssd " +
+            "JOIN FETCH ssd.stuSub ss " +
             "JOIN FETCH ssd.student s " +
             "JOIN FETCH s.department d " +
             "JOIN FETCH d.college " +
             "JOIN FETCH ssd.subject sub " +
-            "JOIN FETCH sub.professor")
+            "JOIN FETCH sub.professor " +
+            "WHERE ss.enrollmentType = 'ENROLLED'")
     List<StuSubDetail> findAllWithStudentAndSubject();
 
     /**
      * 학생 ID로 수강 과목 조회 (FETCH JOIN으로 N+1 문제 해결)
      */
     @Query("SELECT s FROM StuSubDetail s " +
+            "LEFT JOIN FETCH s.stuSub ss " +
             "LEFT JOIN FETCH s.student st " +
             "LEFT JOIN FETCH st.department d " +
             "LEFT JOIN FETCH s.subject sub " +
             "LEFT JOIN FETCH sub.professor " +
-            "WHERE s.studentId = :studentId")
+            "WHERE s.studentId = :studentId " +
+            "AND ss.enrollmentType = 'ENROLLED'")
     List<StuSubDetail> findByStudentIdWithRelations(@Param("studentId") Integer studentId);
 
 }

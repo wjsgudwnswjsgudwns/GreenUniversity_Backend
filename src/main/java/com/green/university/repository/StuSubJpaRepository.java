@@ -74,4 +74,6 @@ public interface StuSubJpaRepository extends JpaRepository<StuSub, Integer> {
             "AND s.enrollmentType = 'PRE'")
     List<StuSub> findPreEnrollmentByStudentId(@Param("studentId") Integer studentId);
 
+    List<StuSub> findBySubjectIdAndEnrollmentType(Integer subjectId, String enrollmentType);
+
 }
