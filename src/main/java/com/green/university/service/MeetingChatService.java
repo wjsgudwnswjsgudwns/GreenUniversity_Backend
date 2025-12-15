@@ -1,6 +1,7 @@
 package com.green.university.service;
 
 import com.green.university.dto.ChatMessageDto;
+import com.green.university.enums.ChatMessageType;
 import com.green.university.handler.exception.CustomRestfullException;
 import com.green.university.repository.MeetingChatJpaRepository;
 import com.green.university.repository.MeetingJpaRepository;
@@ -57,29 +58,66 @@ public class MeetingChatService {
             Integer meetingId,
             Integer senderUserId,
             String senderDisplayName,
-            String messageText
+            String messageText,
+            String messageType
     ) {
         Meeting meeting = meetingRepo.findById(meetingId)
-                .orElseThrow(() ->
-                        new CustomRestfullException("존재하지 않는 회의입니다.", HttpStatus.NOT_FOUND)
-                );
-
-        User sender = userRepo.findById(senderUserId)
-                .orElseThrow(() ->
-                        new CustomRestfullException("존재하지 않는 사용자입니다.", HttpStatus.NOT_FOUND)
-                );
+                .orElseThrow(() -> new CustomRestfullException("존재하지 않는 회의입니다.", HttpStatus.NOT_FOUND));
 
         MeetingChat chat = new MeetingChat();
         chat.setMeeting(meeting);
-        chat.setSender(sender);
-        chat.setSenderName(senderDisplayName);
         chat.setMessage(messageText);
         chat.setSentAt(Timestamp.valueOf(LocalDateTime.now()));
+
+        // 1) type 결정 (기본 CHAT)
+        ChatMessageType type;
+        try {
+            type = (messageType == null || messageType.isBlank())
+                    ? ChatMessageType.CHAT
+                    : ChatMessageType.valueOf(messageType.trim().toUpperCase());
+        } catch (Exception e) {
+            type = ChatMessageType.CHAT;
+        }
+        chat.setType(type);
+
+        // 2) SYSTEM이면 sender null 허용
+        if (type == ChatMessageType.SYSTEM) {
+            chat.setSender(null);
+            chat.setSenderName(null);
+        } else {
+            if (senderUserId == null) {
+                throw new CustomRestfullException("userId가 없습니다.", HttpStatus.BAD_REQUEST);
+            }
+            User sender = userRepo.findById(senderUserId)
+                    .orElseThrow(() -> new CustomRestfullException("존재하지 않는 사용자입니다.", HttpStatus.NOT_FOUND));
+            chat.setSender(sender);
+            chat.setSenderName(
+                    (senderDisplayName == null || senderDisplayName.isBlank()) ? "참가자" : senderDisplayName
+            );
+        }
 
         MeetingChat saved = chatRepo.save(chat);
         return toDto(saved);
     }
 
+
+    @Transactional
+    public ChatMessageDto saveSystemMessage(Integer meetingId, String messageText) {
+        Meeting meeting = meetingRepo.findById(meetingId)
+                .orElseThrow(() ->
+                        new CustomRestfullException("존재하지 않는 회의입니다.", HttpStatus.NOT_FOUND)
+                );
+
+        MeetingChat chat = new MeetingChat();
+        chat.setMeeting(meeting);
+        chat.setSender(null);          // SYSTEM
+        chat.setSenderName(null);      // 표시 안 함
+        chat.setMessage(messageText);
+        chat.setType(ChatMessageType.SYSTEM);
+
+        MeetingChat saved = chatRepo.save(chat);
+        return toDto(saved);
+    }
 
     /**
      * 최근 메시지들 조회 (초기 입장 시)
@@ -159,18 +197,23 @@ public class MeetingChatService {
      * 엔티티 → DTO 변환
      */
     private ChatMessageDto toDto(MeetingChat chat) {
-        LocalDateTime sentAtLocal = chat.getSentAt()
-                .toInstant()
-                .atZone(ZoneId.systemDefault())
-                .toLocalDateTime();
+        Timestamp ts = chat.getSentAt();
+        LocalDateTime sentAtLocal = (ts != null)
+                ? ts.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
+                : LocalDateTime.now();
+
+        Integer userId = (chat.getSender() != null) ? chat.getSender().getId() : null;
 
         return ChatMessageDto.builder()
                 .messageId(chat.getId())
                 .meetingId(chat.getMeeting().getId())
-                .userId(chat.getSender().getId())
-                .displayName(chat.getSenderName())
+                .userId(userId)
+                .displayName(chat.getSenderName()) // SYSTEM이면 null 가능
                 .message(chat.getMessage())
                 .sentAt(sentAtLocal)
+                .type(chat.getType() != null ? chat.getType().name() : "CHAT")
                 .build();
     }
+
+
 }

@@ -42,6 +42,8 @@ public class MeetingParticipant {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @Column(name = "display_name")
+    private String displayName;
     /**
      * 참가자 이메일.
      * - 일반적으로 user에 매핑된 이메일을 복제해서 저장.

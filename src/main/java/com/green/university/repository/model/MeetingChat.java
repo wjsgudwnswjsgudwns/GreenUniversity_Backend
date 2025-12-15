@@ -2,14 +2,8 @@ package com.green.university.repository.model;
 
 import java.sql.Timestamp;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
-import jakarta.persistence.Id;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import com.green.university.enums.ChatMessageType;
+import jakarta.persistence.*;
 
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
@@ -38,15 +32,15 @@ public class MeetingChat {
     /**
      * 메시지 보낸 사용자 (반드시 user_tb 참조).
      */
-    @ManyToOne
-    @JoinColumn(name = "sender_user_id", nullable = false)
+    @ManyToOne(optional = true)
+    @JoinColumn(name = "sender_user_id", nullable = true)
     private User sender;
 
     /**
      * 당시 표기용 이름/닉네임.
      * (나중에 이름이 바뀌어도 로그에는 이 값이 남도록 별도로 저장)
      */
-    @Column(name = "sender_name", nullable = false, length = 50)
+    @Column(name = "sender_name", nullable = true, length = 50)
     private String senderName;
 
     /**
@@ -54,6 +48,10 @@ public class MeetingChat {
      */
     @Column(name = "message", nullable = false, columnDefinition = "TEXT")
     private String message;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "message_type", nullable = false, length = 20)
+    private ChatMessageType type;
 
     /**
      * 전송 시각.

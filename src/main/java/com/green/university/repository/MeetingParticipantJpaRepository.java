@@ -23,4 +23,6 @@ public interface MeetingParticipantJpaRepository extends JpaRepository<MeetingPa
 
     // 해당 회의에 아직 JOINED 상태인 사람이 있는지 여부
     boolean existsByMeeting_IdAndStatus(Integer meetingId, String status);
+
+    List<MeetingParticipant> findByMeeting_IdAndStatus(Integer meetingId, String status);
 }

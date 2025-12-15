@@ -21,4 +21,8 @@ public class MeetingJoinInfoResDto {
     private String userRole;        // student / professor / staff
 
     private String sessionKey;
+
+    private Boolean isHost;      // 이 사용자가 HOST 인지 여부
+    private Integer hostUserId;  // 회의 주최자 userId
+
 }
