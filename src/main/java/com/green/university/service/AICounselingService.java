@@ -28,52 +28,34 @@ public class AICounselingService {
     private final SubjectJpaRepository subjectRepository;
     private final GeminiService geminiService;
 
-    /**
-     * 학생의 상담 일정 조회
-     */
+    // ✅ AI 분석 서비스 추가
+    private final AIAnalysisResultService aiAnalysisResultService;
+
     public List<AICounseling> getStudentCounselings(Integer studentId) {
         return aiCounselingRepository.findByStudentIdOrderByScheduledAtDesc(studentId);
     }
 
-    /**
-     * 학생의 예정된 상담 일정 조회 (미완료만)
-     */
     public List<AICounseling> getUpcomingCounselings(Integer studentId) {
         return aiCounselingRepository.findByStudentIdAndIsCompletedFalseOrderByScheduledAtAsc(studentId);
     }
 
-    /**
-     * 교수의 상담 일정 조회
-     */
     public List<AICounseling> getProfessorCounselings(Integer professorId) {
         return aiCounselingRepository.findByProfessorIdOrderByScheduledAtDesc(professorId);
     }
 
-    /**
-     * 과목별 상담 일정 조회
-     */
     public List<AICounseling> getSubjectCounselings(Integer subjectId) {
         return aiCounselingRepository.findBySubjectIdOrderByScheduledAtDesc(subjectId);
     }
 
-    /**
-     * 교수-학생 간 상담 내역 조회
-     */
     public List<AICounseling> getCounselingsByProfessorAndStudent(Integer professorId, Integer studentId) {
         return aiCounselingRepository.findByProfessorIdAndStudentId(professorId, studentId);
     }
 
-    /**
-     * 상담 일정 생성
-     */
     @Transactional
     public AICounseling createCounseling(AICounseling counseling) {
         return aiCounselingRepository.save(counseling);
     }
 
-    /**
-     * 상담 기록 + Gemini AI 분석
-     */
     @Transactional
     public AICounseling createCounselingWithAnalysis(
             Integer studentId,
@@ -82,6 +64,8 @@ public class AICounselingService {
             LocalDateTime scheduledAt,
             String counselingContent
     ) {
+        System.out.println("=== 상담 기록 + AI 분석 시작 ===");
+
         // 1. Gemini로 상담 내용 분석
         String riskLevel = geminiService.analyzeCounselingContent(counselingContent);
         System.out.println("Gemini 분석 결과: " + riskLevel);
@@ -110,15 +94,38 @@ public class AICounselingService {
         // 4. AIAnalysisResult의 counselingStatus 업데이트
         updateCounselingStatus(studentId, subjectId, riskLevel);
 
+        // ✅ 5. 전체 AI 분석 재실행 (실시간 트리거)
+        triggerAIAnalysisForCounseling(studentId, subjectId, subject);
+
+        System.out.println("=== 상담 기록 + AI 분석 완료 ===");
         return saved;
     }
 
     /**
-     * AIAnalysisResult의 counselingStatus 업데이트
+     * ✅ 상담 완료 시 AI 분석 트리거
      */
+    private void triggerAIAnalysisForCounseling(Integer studentId, Integer subjectId, Subject subject) {
+        try {
+            System.out.println("🤖 상담 완료 후 AI 분석 시작: 학생 " + studentId);
+
+            if (subject != null) {
+                aiAnalysisResultService.analyzeStudent(
+                        studentId,
+                        subjectId,
+                        subject.getSubYear(),
+                        subject.getSemester()
+                );
+                System.out.println("✅ 상담 완료 후 AI 분석 완료");
+            }
+
+        } catch (Exception e) {
+            System.err.println("⚠️ AI 분석 실패 (상담 저장은 정상 처리됨): " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
     private void updateCounselingStatus(Integer studentId, Integer subjectId, String riskLevel) {
         try {
-            // 해당 학생-과목의 최신 분석 결과 조회
             List<AIAnalysisResult> results = aiAnalysisResultRepository
                     .findByStudentIdAndSubjectIdOrderByAnalyzedAtDesc(studentId, subjectId);
 
@@ -126,7 +133,6 @@ public class AICounselingService {
                 AIAnalysisResult result = results.get(0);
                 result.setCounselingStatus(riskLevel);
 
-                // 종합 위험도 재계산
                 String overallRisk = recalculateOverallRisk(result);
                 result.setOverallRisk(overallRisk);
 
@@ -138,9 +144,6 @@ public class AICounselingService {
         }
     }
 
-    /**
-     * 종합 위험도 재계산
-     */
     private String recalculateOverallRisk(AIAnalysisResult result) {
         int criticalCount = 0;
         int riskCount = 0;
@@ -171,7 +174,6 @@ public class AICounselingService {
             }
         }
 
-        // 종합 판단 로직
         if (criticalCount >= 1) {
             return "CRITICAL";
         } else if (riskCount >= 2) {
@@ -183,11 +185,11 @@ public class AICounselingService {
         }
     }
 
-    /**
-     * 상담 내용 작성 및 완료 처리
-     */
+    // ✅ 상담 내용 작성 및 완료 처리 - AI 분석 트리거 추가
     @Transactional
     public AICounseling completeCounseling(Integer counselingId, String counselingContent) {
+        System.out.println("=== 상담 완료 처리 시작 ===");
+
         AICounseling counseling = aiCounselingRepository.findById(counselingId)
                 .orElseThrow(() -> new RuntimeException("상담 일정을 찾을 수 없습니다."));
 
@@ -195,12 +197,30 @@ public class AICounselingService {
         counseling.setIsCompleted(true);
         counseling.setCompletedAt(LocalDateTime.now());
 
-        return aiCounselingRepository.save(counseling);
+        // ✅ Gemini AI 분석 추가
+        try {
+            String riskLevel = geminiService.analyzeCounselingContent(counselingContent);
+            counseling.setAiAnalysisResult(riskLevel);
+            System.out.println("Gemini 상담 분석 결과: " + riskLevel);
+        } catch (Exception e) {
+            System.err.println("⚠️ Gemini 분석 실패: " + e.getMessage());
+        }
+
+        AICounseling saved = aiCounselingRepository.save(counseling);
+
+        // ✅ AI 전체 분석 트리거
+        if (counseling.getSubject() != null) {
+            triggerAIAnalysisForCounseling(
+                    counseling.getStudentId(),
+                    counseling.getSubjectId(),
+                    counseling.getSubject()
+            );
+        }
+
+        System.out.println("=== 상담 완료 처리 완료 ===");
+        return saved;
     }
 
-    /**
-     * 상담 일정 수정
-     */
     @Transactional
     public AICounseling updateCounseling(Integer counselingId, LocalDateTime newScheduledAt) {
         AICounseling counseling = aiCounselingRepository.findById(counselingId)
@@ -210,17 +230,11 @@ public class AICounselingService {
         return aiCounselingRepository.save(counseling);
     }
 
-    /**
-     * 상담 일정 삭제
-     */
     @Transactional
     public void deleteCounseling(Integer counselingId) {
         aiCounselingRepository.deleteById(counselingId);
     }
 
-    /**
-     * AI 분석 대상 상담 내역 조회
-     */
     public List<AICounseling> getCompletedCounselingsForAnalysis(Integer studentId) {
         return aiCounselingRepository.findCompletedCounselingsWithContentByStudentId(studentId);
     }

@@ -32,4 +32,6 @@ public interface ProfessorJpaRepository extends JpaRepository<Professor, Integer
     // 사번으로 조회 (페이징) - 단일 결과를 Page로 반환
     @Query("SELECT p FROM Professor p WHERE p.id = :professorId")
     Page<Professor> findByProfessorId(@Param("professorId") Integer professorId, Pageable pageable);
+
+    List<Professor> findByDepartmentId(Integer deptId);
 }

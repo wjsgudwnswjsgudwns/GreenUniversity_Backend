@@ -2,10 +2,7 @@ package com.green.university.service;
 
 import java.util.List;
 
-import com.green.university.repository.StuSchJpaRepository;
-import com.green.university.repository.TuitionJpaRepository;
-import com.green.university.repository.CollTuitJpaRepository;
-import com.green.university.repository.StudentJpaRepository;
+import com.green.university.repository.*;
 import com.green.university.repository.model.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -30,6 +27,12 @@ public class TuitionService {
 
     @Autowired
     private StudentJpaRepository studentJpaRepository;
+
+    @Autowired
+    private StuSubDetailJpaRepository stuSubDetailJpaRepository;
+
+    @Autowired
+    private AIAnalysisResultService aiAnalysisResultService;
 
     @Autowired
     private StuStatService stuStatService;
@@ -211,6 +214,7 @@ public class TuitionService {
      */
     @Transactional
     public void updateStatus(Integer studentId) {
+        System.out.println("=== 등록금 납부 처리 시작 ===");
 
         TuitionId id = new TuitionId();
         id.setStudentId(studentId);
@@ -223,13 +227,51 @@ public class TuitionService {
                         HttpStatus.INTERNAL_SERVER_ERROR
                 ));
 
-        // 상태만 true로 업데이트
         tuition.setStatus(true);
 
-        // 납부 성공 시, 휴학 상태인 학생이라면 재학 상태로 변경
         String status = stuStatService.readCurrentStatus(studentId).getStatus();
         if ("휴학".equals(status)) {
             stuStatService.updateStatus(studentId, "재학", "9999-01-01", null);
+        }
+
+        // 등록금 납부 후 AI 분석 트리거 추가
+        triggerAIAnalysisForTuition(studentId);
+
+        System.out.println("=== 등록금 납부 처리 완료 ===");
+    }
+
+    /**
+     * ✅ 등록금 납부 후 해당 학생의 모든 과목 AI 분석
+     */
+    private void triggerAIAnalysisForTuition(Integer studentId) {
+        try {
+            System.out.println("🤖 등록금 납부 후 AI 분석 시작: 학생 " + studentId);
+
+            List<StuSubDetail> enrollments = stuSubDetailJpaRepository
+                    .findByStudentIdWithRelations(studentId);
+
+            int successCount = 0;
+            for (StuSubDetail enrollment : enrollments) {
+                try {
+                    if (enrollment.getSubject() != null) {
+                        aiAnalysisResultService.analyzeStudent(
+                                studentId,
+                                enrollment.getSubjectId(),
+                                enrollment.getSubject().getSubYear(),
+                                enrollment.getSubject().getSemester()
+                        );
+                        successCount++;
+                    }
+                } catch (Exception e) {
+                    System.err.println("⚠️ 과목 " + enrollment.getSubjectId() + " AI 분석 실패: " + e.getMessage());
+                }
+            }
+
+            System.out.println("✅ 등록금 납부 후 AI 분석 완료: " + successCount + "개 과목");
+
+        } catch (Exception e) {
+            System.err.println("⚠️ AI 분석 실패 (등록금 처리는 정상): " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -251,4 +293,6 @@ public class TuitionService {
 
         return collTuitJpaRepository.findAmountByCollegeId(collegeId);
     }
+
+
 }

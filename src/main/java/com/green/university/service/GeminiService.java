@@ -1,5 +1,7 @@
 package com.green.university.service;
 
+import com.green.university.repository.model.AIAnalysisResult;
+import com.green.university.repository.model.StuSubDetail;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -27,8 +29,6 @@ public class GeminiService {
 
     /**
      * 상담 내용을 Gemini AI로 분석하여 위험도 반환
-     * @param counselingContent 상담 내용
-     * @return "CRITICAL", "RISK", "CAUTION", "NORMAL"
      */
     public String analyzeCounselingContent(String counselingContent) {
         try {
@@ -64,11 +64,6 @@ public class GeminiService {
                             "- 문제가 해결되었거나 긍정적인 상태\n" +
                             "- 성적 향상, 동기 부여 등 긍정적 변화\n" +
                             "- 단순 정보 문의\n\n" +
-                            "=== 중요 ===\n" +
-                            "- \"로또 당첨으로 등록금 문제 해결\" → NORMAL (문제가 해결됨)\n" +
-                            "- \"등록금 낼 돈이 없다\" → CRITICAL (현재 심각한 문제)\n" +
-                            "- \"성적이 올랐다\" → NORMAL (긍정적 변화)\n" +
-                            "- \"계속 F학점만 받는다\" → RISK (지속적 문제)\n\n" +
                             "위 기준을 바탕으로 상담 내용을 분석한 후, 반드시 다음 4가지 중 **정확히 하나**만 응답하세요:\n" +
                             "CRITICAL, RISK, CAUTION, NORMAL\n\n" +
                             "다른 설명이나 부가 텍스트 없이 위험도 단어 하나만 출력하세요.",
@@ -81,7 +76,86 @@ public class GeminiService {
         } catch (Exception e) {
             System.err.println("Gemini 분석 실패: " + e.getMessage());
             e.printStackTrace();
-            return "NORMAL"; // 실패 시 기본값
+            return "NORMAL";
+        }
+    }
+
+    /**
+     * 학생의 종합 데이터를 분석하여 위험 원인 코멘트 생성
+     */
+    public String generateRiskComment(AIAnalysisResult result, StuSubDetail detail) {
+        try {
+            // 위험도가 RISK 또는 CRITICAL인 경우에만 상세 분석
+            if (!"RISK".equals(result.getOverallRisk()) && !"CRITICAL".equals(result.getOverallRisk())) {
+                return null;
+            }
+
+            StringBuilder dataBuilder = new StringBuilder();
+            dataBuilder.append("=== 학생 데이터 분석 ===\n\n");
+
+            // 출석 상태
+            if (!"NORMAL".equals(result.getAttendanceStatus())) {
+                int absent = detail != null && detail.getAbsent() != null ? detail.getAbsent() : 0;
+                int lateness = detail != null && detail.getLateness() != null ? detail.getLateness() : 0;
+                dataBuilder.append(String.format("📌 출석 상태: %s\n", result.getAttendanceStatus()));
+                dataBuilder.append(String.format("   - 결석: %d회, 지각: %d회\n", absent, lateness));
+            }
+
+            // 과제 상태
+            if (!"NORMAL".equals(result.getHomeworkStatus())) {
+                int homework = detail != null && detail.getHomework() != null ? detail.getHomework() : 0;
+                dataBuilder.append(String.format("📌 과제 상태: %s\n", result.getHomeworkStatus()));
+                dataBuilder.append(String.format("   - 과제 점수: %d점\n", homework));
+            }
+
+            // 중간고사 상태
+            if (!"NORMAL".equals(result.getMidtermStatus())) {
+                int midExam = detail != null && detail.getMidExam() != null ? detail.getMidExam() : 0;
+                dataBuilder.append(String.format("📌 중간고사 상태: %s\n", result.getMidtermStatus()));
+                dataBuilder.append(String.format("   - 중간고사 점수: %d점\n", midExam));
+            }
+
+            // 기말고사 상태
+            if (!"NORMAL".equals(result.getFinalStatus())) {
+                int finalExam = detail != null && detail.getFinalExam() != null ? detail.getFinalExam() : 0;
+                dataBuilder.append(String.format("📌 기말고사 상태: %s\n", result.getFinalStatus()));
+                dataBuilder.append(String.format("   - 기말고사 점수: %d점\n", finalExam));
+            }
+
+            // 등록금 상태
+            if (!"NORMAL".equals(result.getTuitionStatus())) {
+                dataBuilder.append(String.format("📌 등록금 상태: %s\n", result.getTuitionStatus()));
+                dataBuilder.append("   - 등록금 미납 상태\n");
+            }
+
+            // 상담 상태
+            if (!"NORMAL".equals(result.getCounselingStatus()) && result.getCounselingStatus() != null) {
+                dataBuilder.append(String.format("📌 상담 상태: %s\n", result.getCounselingStatus()));
+                dataBuilder.append("   - 상담 내용에서 위험 신호 감지\n");
+            }
+
+            String prompt = String.format(
+                    "당신은 대학생 학업 지원 전문가입니다. 다음 학생 데이터를 분석하여 중도 이탈 위험의 주요 원인을 **간결하고 명확하게** 설명해주세요.\n\n" +
+                            "%s\n\n" +
+                            "=== 분석 요구사항 ===\n" +
+                            "1. **2-3문장으로 핵심만 간결하게** 작성하세요\n" +
+                            "2. 가장 심각한 문제부터 우선순위로 언급하세요\n" +
+                            "3. 구체적인 수치를 언급하며 설명하세요\n" +
+                            "4. 교육적이고 객관적인 톤을 유지하세요\n" +
+                            "5. 불필요한 인사말이나 서론 없이 바로 분석 내용으로 시작하세요\n\n" +
+                            "=== 예시 ===\n" +
+                            "\"결석 3회와 지각 6회로 출석률이 심각하게 낮으며, 과제 점수 35점으로 학업 수행도가 매우 부진합니다. 중간고사 28점으로 학업 이해도가 낮아 즉각적인 학습 지원이 필요합니다.\"\n\n" +
+                            "위 형식으로 이 학생의 위험 요인을 분석해주세요:",
+                    dataBuilder.toString()
+            );
+
+            String comment = callGeminiApi(prompt);
+            return comment.trim();
+
+        } catch (Exception e) {
+            System.err.println("AI 코멘트 생성 실패: " + e.getMessage());
+            e.printStackTrace();
+            return null;
         }
     }
 

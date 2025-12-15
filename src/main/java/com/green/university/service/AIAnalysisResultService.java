@@ -8,6 +8,7 @@ import com.green.university.repository.model.AICounseling;
 import com.green.university.repository.model.StuSubDetail;
 import com.green.university.repository.model.Tuition;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,7 +26,12 @@ public class AIAnalysisResultService {
     private final AIAnalysisResultRepository aiAnalysisResultRepository;
     private final StuSubDetailJpaRepository stuSubDetailRepository;
     private final TuitionJpaRepository tuitionRepository;
-    private final AICounselingService aiCounselingService;
+//    private final AICounselingService aiCounselingService;
+
+    private final AICounselingQueryService counselingQueryService;
+
+    @Autowired
+    private GeminiService geminiService;
 
     /**
      * 학생의 분석 결과 조회 - DB에서 조회
@@ -106,6 +112,17 @@ public class AIAnalysisResultService {
 
         // 종합 위험도 계산
         result.setOverallRisk(calculateOverallRisk(result));
+
+        // RISK 또는 CRITICAL인 경우 AI 코멘트 생성
+        if ("RISK".equals(result.getOverallRisk()) || "CRITICAL".equals(result.getOverallRisk())) {
+            try {
+                String aiComment = geminiService.generateRiskComment(result, enrollment);
+                result.setAnalysisDetail(aiComment);
+            } catch (Exception e) {
+                System.err.println("AI 코멘트 생성 실패: " + e.getMessage());
+                result.setAnalysisDetail(null);
+            }
+        }
 
         // DB에 저장
         return aiAnalysisResultRepository.save(result);
@@ -234,6 +251,24 @@ public class AIAnalysisResultService {
 
         // 종합 위험도 계산
         result.setOverallRisk(calculateOverallRisk(result));
+
+        // RISK 또는 CRITICAL인 경우 AI 코멘트 생성
+        if ("RISK".equals(result.getOverallRisk()) || "CRITICAL".equals(result.getOverallRisk())) {
+            try {
+                // StuSubDetail 조회
+                StuSubDetail detail = stuSubDetailRepository
+                        .findByStudentIdAndSubjectId(studentId, subjectId)
+                        .orElse(null);
+
+                String aiComment = geminiService.generateRiskComment(result, detail);
+                result.setAnalysisDetail(aiComment);
+            } catch (Exception e) {
+                System.err.println("AI 코멘트 생성 실패: " + e.getMessage());
+                result.setAnalysisDetail(null);
+            }
+        } else {
+            result.setAnalysisDetail(null); // NORMAL, CAUTION은 코멘트 없음
+        }
 
         return aiAnalysisResultRepository.save(result);
     }
@@ -397,13 +432,13 @@ public class AIAnalysisResultService {
     private String analyzeCounseling(Integer studentId) {
         LocalDateTime threeMonthsAgo = LocalDateTime.now().minusMonths(3);
 
-        List<AICounseling> counselings = aiCounselingService
-                .getCompletedCounselingsForAnalysis(studentId);
+        List<AICounseling> counselings =
+                counselingQueryService.getCompletedCounselingsForAnalysis(studentId);
 
         List<AICounseling> recentCounselings = counselings.stream()
                 .filter(c -> c.getCompletedAt() != null &&
                         c.getCompletedAt().isAfter(threeMonthsAgo))
-                .collect(Collectors.toList());
+                .toList();
 
         if (recentCounselings.isEmpty()) {
             return "NORMAL";
@@ -411,18 +446,15 @@ public class AIAnalysisResultService {
 
         int frequencyScore = calculateFrequencyScore(recentCounselings.size());
         int trendScore = calculateTrendScore(recentCounselings);
+
         int totalScore = (frequencyScore * 30 + trendScore * 70) / 100;
 
-        if (totalScore >= 80) {
-            return "CRITICAL";
-        } else if (totalScore >= 60) {
-            return "RISK";
-        } else if (totalScore >= 40) {
-            return "CAUTION";
-        } else {
-            return "NORMAL";
-        }
+        if (totalScore >= 80) return "CRITICAL";
+        if (totalScore >= 60) return "RISK";
+        if (totalScore >= 40) return "CAUTION";
+        return "NORMAL";
     }
+
 
     private int calculateFrequencyScore(int counselingCount) {
         if (counselingCount >= 10) {
