@@ -112,6 +112,16 @@ public class AIAnalysisResultController {
         return ResponseEntity.ok(new AIResponseDTO<>(1, count + "건의 분석 완료", count));
     }
 
+    /**
+     * 교수 담당 학생 분석 결과 조회 (교수용) - 모든 위험도 포함
+     */
+    @GetMapping("/advisor/{advisorId}/students")
+    public ResponseEntity<?> getAdvisorStudents(@PathVariable Integer advisorId) {
+        List<AIAnalysisResult> results = aiAnalysisResultService.getAdvisorStudents(advisorId);
+        return ResponseEntity.ok(new AIResponseDTO<>(1, "담당 학생 조회 성공", results));
+    }
+
+
     // Request DTO
     @lombok.Data
     static class AnalyzeBatchRequest {

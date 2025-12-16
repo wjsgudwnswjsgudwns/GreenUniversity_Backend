@@ -17,4 +17,13 @@ public class AICounselingQueryService {
         return aiCounselingRepository
                 .findCompletedCounselingsWithContentByStudentId(studentId);
     }
+
+    /**
+     * 학생의 특정 과목에 대한 완료된 상담 조회 (과목별)
+     */
+    public List<AICounseling> getCompletedCounselingsForAnalysisBySubject(
+            Integer studentId, Integer subjectId) {
+        return aiCounselingRepository
+                .findCompletedCounselingsWithContentByStudentIdAndSubjectId(studentId, subjectId);
+    }
 }

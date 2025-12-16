@@ -37,9 +37,9 @@ public class ProfessorService {
     @Autowired
     private ProfessorJpaRepository professorJpaRepository;
 
-    // ✅ AI 분석 서비스 추가
-    @Autowired
-    private AIAnalysisResultService aiAnalysisResultService;
+//    // AI 분석 서비스
+//    @Autowired
+//    private AIAnalysisResultService aiAnalysisResultService;
 
     // 교수가 맡은 과목들의 학기 검색
     @Transactional(readOnly = true)
@@ -143,7 +143,7 @@ public class ProfessorService {
         System.out.println("✅ StuSub 저장 완료");
 
         // ✅ AI 분석 트리거 (실시간)
-        triggerAIAnalysis(updateStudentGradeDto.getStudentId(), updateStudentGradeDto.getSubjectId());
+//        triggerAIAnalysis(updateStudentGradeDto.getStudentId(), updateStudentGradeDto.getSubjectId());
 
         System.out.println("=== 성적 입력 완료 ===");
     }
@@ -151,32 +151,32 @@ public class ProfessorService {
     /**
      * ✅ AI 분석 트리거 (별도 메서드로 분리)
      */
-    private void triggerAIAnalysis(Integer studentId, Integer subjectId) {
-        try {
-            System.out.println("🤖 AI 분석 시작: 학생 " + studentId + ", 과목 " + subjectId);
-
-            StuSubDetail detail = stuSubDetailJpaRepository
-                    .findByStudentIdAndSubjectId(studentId, subjectId)
-                    .orElse(null);
-
-            if (detail != null && detail.getSubject() != null) {
-                aiAnalysisResultService.analyzeStudent(
-                        studentId,
-                        subjectId,
-                        detail.getSubject().getSubYear(),
-                        detail.getSubject().getSemester()
-                );
-                System.out.println("✅ AI 분석 완료");
-            } else {
-                System.out.println("⚠️ 과목 정보를 찾을 수 없어 AI 분석 생략");
-            }
-
-        } catch (Exception e) {
-            System.err.println("⚠️ AI 분석 실패 (성적 입력은 정상 처리됨): " + e.getMessage());
-            e.printStackTrace();
-            // AI 분석 실패해도 성적 입력은 정상 유지
-        }
-    }
+//    private void triggerAIAnalysis(Integer studentId, Integer subjectId) {
+//        try {
+//            System.out.println("🤖 AI 분석 시작: 학생 " + studentId + ", 과목 " + subjectId);
+//
+//            StuSubDetail detail = stuSubDetailJpaRepository
+//                    .findByStudentIdAndSubjectId(studentId, subjectId)
+//                    .orElse(null);
+//
+//            if (detail != null && detail.getSubject() != null) {
+//                aiAnalysisResultService.analyzeStudent(
+//                        studentId,
+//                        subjectId,
+//                        detail.getSubject().getSubYear(),
+//                        detail.getSubject().getSemester()
+//                );
+//                System.out.println("✅ AI 분석 완료");
+//            } else {
+//                System.out.println("⚠️ 과목 정보를 찾을 수 없어 AI 분석 생략");
+//            }
+//
+//        } catch (Exception e) {
+//            System.err.println("⚠️ AI 분석 실패 (성적 입력은 정상 처리됨): " + e.getMessage());
+//            e.printStackTrace();
+//            // AI 분석 실패해도 성적 입력은 정상 유지
+//        }
+//    }
 
     // 강의계획서 조회
     @Transactional(readOnly = true)

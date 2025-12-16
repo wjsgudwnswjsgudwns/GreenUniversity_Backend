@@ -40,4 +40,12 @@ public interface AICounselingRepository extends JpaRepository<AICounseling, Inte
      */
     @Query("SELECT c FROM AICounseling c WHERE c.isCompleted = true AND c.counselingContent IS NOT NULL AND c.studentId = :studentId")
     List<AICounseling> findCompletedCounselingsWithContentByStudentId(@Param("studentId") Integer studentId);
+
+    /**
+     * 완료된 상담 중 내용이 작성된 상담 조회 (AI 분석 대상) - 과목별
+     */
+    @Query("SELECT c FROM AICounseling c WHERE c.isCompleted = true AND c.counselingContent IS NOT NULL AND c.studentId = :studentId AND c.subjectId = :subjectId ORDER BY c.completedAt DESC")
+    List<AICounseling> findCompletedCounselingsWithContentByStudentIdAndSubjectId(
+            @Param("studentId") Integer studentId,
+            @Param("subjectId") Integer subjectId);
 }

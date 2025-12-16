@@ -66,4 +66,17 @@ public interface AIAnalysisResultRepository extends JpaRepository<AIAnalysisResu
      */
     @Query("SELECT a FROM AIAnalysisResult a ORDER BY a.analyzedAt DESC")
     List<AIAnalysisResult> findAllOrderByAnalyzedAtDesc();
+
+    /**
+     * 교수 담당 학생의 분석 결과 조회 (모든 위험도 포함) - FETCH JOIN 추가
+     */
+    @Query("SELECT DISTINCT a FROM AIAnalysisResult a " +
+            "LEFT JOIN FETCH a.student s " +
+            "LEFT JOIN FETCH s.department d " +
+            "LEFT JOIN FETCH d.college " +
+            "LEFT JOIN FETCH a.subject sub " +
+            "LEFT JOIN FETCH sub.professor " +
+            "WHERE s.advisorId = :advisorId " +
+            "ORDER BY a.analyzedAt DESC")
+    List<AIAnalysisResult> findByAdvisorIdWithRelations(@Param("advisorId") Integer advisorId);
 }

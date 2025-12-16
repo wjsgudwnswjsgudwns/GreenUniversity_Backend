@@ -5,8 +5,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.green.university.repository.EvaluationJpaRepository;
 import com.green.university.repository.GradeJpaRepository;
 import com.green.university.repository.StuSubJpaRepository;
+import com.green.university.repository.model.Evaluation;
 import com.green.university.repository.model.Grade;
 import com.green.university.repository.model.StuSub;
 import com.green.university.repository.model.Subject;
@@ -28,6 +30,9 @@ public class GradeService {
 
     @Autowired
     private StuSubJpaRepository stuSubJpaRepository;
+
+    @Autowired
+    private EvaluationJpaRepository evaluationJpaRepository;
 
     // 학생이 수강한 연도 조회
     @Transactional(readOnly = true)
@@ -200,8 +205,17 @@ public class GradeService {
         dto.setName(subject != null ? subject.getName() : null);
         dto.setType(subject != null ? subject.getType() : null);
         dto.setGrade(stuSub.getGrade());
-        dto.setGrades(stuSub.getCompleteGrade() != null ? String.valueOf(stuSub.getCompleteGrade()) : null);
+
+        // 이수학점 설정 - Subject의 grades 사용 (수정!)
+        dto.setGrades(subject != null ? String.valueOf(subject.getGrades()) : null);
+
         dto.setGradeValue(stuSub.getGrade() != null ? String.valueOf(convertGradeToValue(stuSub.getGrade())) : null);
+
+        // 강의평가 여부 확인
+        Evaluation evaluation = evaluationJpaRepository
+                .findByStudentIdAndSubjectId(stuSub.getStudentId(), stuSub.getSubjectId())
+                .orElse(null);
+        dto.setEvaluationId(evaluation != null ? evaluation.getEvaluationId() : null);
 
         return dto;
     }
