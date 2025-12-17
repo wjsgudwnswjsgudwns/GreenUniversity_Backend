@@ -4,11 +4,15 @@ import com.green.university.dto.AIResponseDTO;
 import com.green.university.repository.model.AIAnalysisResult;
 import com.green.university.service.AIAnalysisResultService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/ai-analysis")
@@ -68,7 +72,7 @@ public class AIAnalysisResultController {
     }
 
     /**
-     * 전체 위험 학생 조회 (스태프용) - CAUTION, RISK, CRITICAL
+     * 전체 위험 학생 조회 (스태프용) - CAUTION, RISK, CRITICAL (기존 메서드 유지)
      */
     @GetMapping("/risk-students/all")
     public ResponseEntity<?> getAllRiskStudents() {
@@ -77,13 +81,66 @@ public class AIAnalysisResultController {
     }
 
     /**
-     * 전체 학생 분석 결과 조회 (스태프용) - 모든 위험도 포함
+     * 전체 학생 분석 결과 조회 (스태프용) - 모든 위험도 포함 (기존 메서드 유지)
      */
     @GetMapping("/students/all")
     public ResponseEntity<?> getAllStudents() {
         List<AIAnalysisResult> results = aiAnalysisResultService.getAllStudents();
         return ResponseEntity.ok(new AIResponseDTO<>(1, "전체 학생 조회 성공", results));
     }
+
+    // ===================== 페이징용 새 엔드포인트 =====================
+
+    /**
+     * 전체 학생 분석 결과 조회 (페이징) - 학생별로 그룹핑
+     * @param page 페이지 번호 (0부터 시작)
+     * @param size 페이지당 학생 수 (기본 10명)
+     * @param collegeId 단과대학 ID (선택)
+     * @param departmentId 학과 ID (선택)
+     * @param riskLevel 위험도 (선택: NORMAL, CAUTION, RISK, CRITICAL)
+     */
+    @GetMapping("/students/paged")
+    public ResponseEntity<?> getAllStudentsPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) Integer collegeId,
+            @RequestParam(required = false) Integer departmentId,
+            @RequestParam(required = false) String riskLevel) {
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Map<String, Object>> results = aiAnalysisResultService.getAllStudentsGroupedByStudent(
+                collegeId, departmentId, riskLevel, pageable);
+
+        return ResponseEntity.ok(new AIResponseDTO<>(1, "전체 학생 페이징 조회 성공", results));
+    }
+
+    /**
+     * 위험 학생 분석 결과 조회 (페이징) - 학생별로 그룹핑
+     * RISK, CRITICAL만 조회
+     * @param page 페이지 번호 (0부터 시작)
+     * @param size 페이지당 학생 수 (기본 10명)
+     * @param collegeId 단과대학 ID (선택)
+     * @param departmentId 학과 ID (선택)
+     * @param riskLevel 위험도 (선택: RISK, CRITICAL)
+     * @param searchTerm 검색어 (학번, 이름, 학과명)
+     */
+    @GetMapping("/risk-students/paged")
+    public ResponseEntity<?> getRiskStudentsPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) Integer collegeId,
+            @RequestParam(required = false) Integer departmentId,
+            @RequestParam(required = false) String riskLevel,
+            @RequestParam(required = false) String searchTerm) {
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Map<String, Object>> results = aiAnalysisResultService.getRiskStudentsGroupedByStudent(
+                collegeId, departmentId, riskLevel, searchTerm, pageable);
+
+        return ResponseEntity.ok(new AIResponseDTO<>(1, "위험 학생 페이징 조회 성공", results));
+    }
+
+    // ===================== 기존 분석 실행 엔드포인트 (그대로 유지) =====================
 
     /**
      * AI 분석 실행
@@ -121,15 +178,34 @@ public class AIAnalysisResultController {
         return ResponseEntity.ok(new AIResponseDTO<>(1, "담당 학생 조회 성공", results));
     }
 
+    /**
+     * 교수 담당 학생 분석 결과 조회 (페이징) - 학생별로 그룹핑
+     * @param advisorId 교수 ID
+     * @param page 페이지 번호 (0부터 시작)
+     * @param size 페이지당 학생 수 (기본 10명)
+     * @param riskLevel 위험도 (선택: NORMAL, CAUTION, RISK, CRITICAL)
+     */
+    @GetMapping("/advisor/{advisorId}/students/paged")
+    public ResponseEntity<?> getAdvisorStudentsPaged(
+            @PathVariable Integer advisorId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String riskLevel) {
 
-    // Request DTO
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Map<String, Object>> results = aiAnalysisResultService.getAdvisorStudentsGroupedByStudent(
+                advisorId, riskLevel, pageable);
+
+        return ResponseEntity.ok(new AIResponseDTO<>(1, "담당 학생 페이징 조회 성공", results));
+    }
+
+    // Request DTOs
     @lombok.Data
     static class AnalyzeBatchRequest {
         private Integer year;
         private Integer semester;
     }
 
-    // Request DTOs
     @lombok.Data
     static class AnalyzeRequest {
         private Integer studentId;
@@ -143,6 +219,4 @@ public class AIAnalysisResultController {
         private Integer year;
         private Integer semester;
     }
-
-
 }
