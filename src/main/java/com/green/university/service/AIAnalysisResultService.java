@@ -17,6 +17,9 @@ import com.green.university.repository.model.Subject;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,8 +38,6 @@ public class AIAnalysisResultService {
     private final AIAnalysisResultRepository aiAnalysisResultRepository;
     private final StuSubDetailJpaRepository stuSubDetailRepository;
     private final TuitionJpaRepository tuitionRepository;
-//    private final AICounselingService aiCounselingService;
-
     private final AICounselingQueryService counselingQueryService;
     private final NotificationService notificationService;
     private final StudentJpaRepository studentRepository;
@@ -49,24 +50,23 @@ public class AIAnalysisResultService {
     @Autowired
     private GeminiService geminiService;
 
+    // ===================== 기존 메서드들 (그대로 유지) =====================
+
     /**
      * 학생의 분석 결과 조회 - DB에서 조회
      * DB에 없으면 실시간 분석 후 저장
      */
     @Transactional
     public List<AIAnalysisResult> getStudentAnalysisResults(Integer studentId) {
-        // 1. DB에서 기존 분석 결과 조회
         List<AIAnalysisResult> existingResults = aiAnalysisResultRepository
                 .findByStudentIdOrderByAnalyzedAtDesc(studentId);
 
-        // 2. 학생의 수강 과목 조회
         List<StuSubDetail> enrollments = stuSubDetailRepository.findByStudentIdWithRelations(studentId);
 
         if (enrollments.isEmpty()) {
             return existingResults;
         }
 
-        // 3. 과목별로 최신 분석 결과가 있는지 확인
         Map<Integer, AIAnalysisResult> resultMap = existingResults.stream()
                 .collect(Collectors.groupingBy(
                         AIAnalysisResult::getSubjectId,
@@ -80,15 +80,12 @@ public class AIAnalysisResultService {
 
         List<AIAnalysisResult> results = new ArrayList<>();
 
-        // 4. 각 과목별로 분석 결과 확인 및 생성
         for (StuSubDetail enrollment : enrollments) {
             Integer subjectId = enrollment.getSubjectId();
 
             if (resultMap.containsKey(subjectId)) {
-                // DB에 저장된 결과가 있으면 그것을 사용
                 results.add(resultMap.get(subjectId));
             } else {
-                // DB에 없으면 새로 분석하고 저장
                 AIAnalysisResult newResult = analyzeAndSaveStudent(
                         studentId,
                         subjectId,
@@ -118,7 +115,6 @@ public class AIAnalysisResultService {
         result.setAnalysisYear(year);
         result.setSemester(semester);
 
-        // 각 항목별 분석
         result.setAttendanceStatus(analyzeAttendance(studentId, subjectId));
         result.setHomeworkStatus(analyzeHomework(studentId, subjectId));
         result.setMidtermStatus(analyzeMidterm(studentId, subjectId));
@@ -126,10 +122,8 @@ public class AIAnalysisResultService {
         result.setTuitionStatus(analyzeTuition(studentId, year, semester));
         result.setCounselingStatus(analyzeCounseling(studentId, subjectId));
 
-        // 종합 위험도 계산
         result.setOverallRisk(calculateOverallRisk(result));
 
-        // RISK 또는 CRITICAL인 경우 AI 코멘트 생성
         if ("RISK".equals(result.getOverallRisk()) || "CRITICAL".equals(result.getOverallRisk())) {
             try {
                 String aiComment = geminiService.generateRiskComment(result, enrollment);
@@ -140,7 +134,6 @@ public class AIAnalysisResultService {
             }
         }
 
-        // DB에 저장
         return aiAnalysisResultRepository.save(result);
     }
 
@@ -182,19 +175,16 @@ public class AIAnalysisResultService {
     }
 
     /**
-     * 전체 학생 분석 결과 조회 - DB에서 조회
+     * 전체 학생 분석 결과 조회 - DB에서 조회 (기존 메서드 유지)
      */
     @Transactional(readOnly = true)
     public List<AIAnalysisResult> getAllStudents() {
-        // 1. 모든 학생-과목 조합 조회
         List<StuSubDetail> allEnrollments = stuSubDetailRepository.findAllWithStudentAndSubject().stream()
-                .filter(e -> e.getStudent() != null && e.getSubject() != null)  // null 체크
+                .filter(e -> e.getStudent() != null && e.getSubject() != null)
                 .collect(Collectors.toList());
 
-        // 2. 기존 AI 분석 결과 조회
         List<AIAnalysisResult> existingResults = aiAnalysisResultRepository.findAllWithRelations();
 
-        // 3. 기존 분석 결과를 Map으로 변환 (최신 것만)
         Map<String, AIAnalysisResult> resultMap = existingResults.stream()
                 .collect(Collectors.toMap(
                         result -> result.getStudentId() + "-" + result.getSubjectId(),
@@ -204,22 +194,18 @@ public class AIAnalysisResultService {
                                         ? existing : replacement
                 ));
 
-        // 4. 모든 학생-과목에 대해 결과 생성
         List<AIAnalysisResult> allResults = new ArrayList<>();
 
         for (StuSubDetail enrollment : allEnrollments) {
             String key = enrollment.getStudentId() + "-" + enrollment.getSubjectId();
 
             if (resultMap.containsKey(key)) {
-                // DB에 저장된 분석 결과가 있으면 사용
                 allResults.add(resultMap.get(key));
             } else {
-                // null 체크 후 기본값 생성
                 if (enrollment.getStudent() == null || enrollment.getSubject() == null) {
                     continue;
                 }
 
-                // DB에 없으면 기본값 생성 (아직 분석되지 않음)
                 AIAnalysisResult defaultResult = new AIAnalysisResult();
                 defaultResult.setStudentId(enrollment.getStudentId());
                 defaultResult.setSubjectId(enrollment.getSubjectId());
@@ -233,7 +219,7 @@ public class AIAnalysisResultService {
                 defaultResult.setTuitionStatus("NORMAL");
                 defaultResult.setCounselingStatus("NORMAL");
                 defaultResult.setOverallRisk("NORMAL");
-                defaultResult.setAnalyzedAt(null); // 아직 분석 안됨
+                defaultResult.setAnalyzedAt(null);
 
                 allResults.add(defaultResult);
             }
@@ -242,20 +228,308 @@ public class AIAnalysisResultService {
         return allResults;
     }
 
+    // ===================== 페이징용 새 메서드 =====================
+
+    /**
+     * 전체 학생 분석 결과 조회 (페이징) - 학생별로 그룹핑
+     */
+    @Transactional(readOnly = true)
+    public Page<Map<String, Object>> getAllStudentsGroupedByStudent(
+            Integer collegeId,
+            Integer departmentId,
+            String riskLevel,
+            Pageable pageable) {
+
+        // 1. 모든 분석 결과 조회 (필터링 없이)
+        List<StuSubDetail> allEnrollments = stuSubDetailRepository.findAllWithStudentAndSubject().stream()
+                .filter(e -> e.getStudent() != null && e.getSubject() != null)
+                .collect(Collectors.toList());
+
+        List<AIAnalysisResult> existingResults = aiAnalysisResultRepository.findAllWithRelations();
+
+        Map<String, AIAnalysisResult> resultMap = existingResults.stream()
+                .collect(Collectors.toMap(
+                        result -> result.getStudentId() + "-" + result.getSubjectId(),
+                        result -> result,
+                        (existing, replacement) ->
+                                existing.getAnalyzedAt().isAfter(replacement.getAnalyzedAt())
+                                        ? existing : replacement
+                ));
+
+        List<AIAnalysisResult> allResults = new ArrayList<>();
+
+        for (StuSubDetail enrollment : allEnrollments) {
+            String key = enrollment.getStudentId() + "-" + enrollment.getSubjectId();
+
+            if (resultMap.containsKey(key)) {
+                allResults.add(resultMap.get(key));
+            } else {
+                if (enrollment.getStudent() == null || enrollment.getSubject() == null) {
+                    continue;
+                }
+
+                AIAnalysisResult defaultResult = new AIAnalysisResult();
+                defaultResult.setStudentId(enrollment.getStudentId());
+                defaultResult.setSubjectId(enrollment.getSubjectId());
+                defaultResult.setStudent(enrollment.getStudent());
+                defaultResult.setSubject(enrollment.getSubject());
+                defaultResult.setAttendanceStatus("NORMAL");
+                defaultResult.setHomeworkStatus("NORMAL");
+                defaultResult.setMidtermStatus("NORMAL");
+                defaultResult.setFinalStatus("NORMAL");
+                defaultResult.setTuitionStatus("NORMAL");
+                defaultResult.setCounselingStatus("NORMAL");
+                defaultResult.setOverallRisk("NORMAL");
+                defaultResult.setAnalyzedAt(null);
+
+                allResults.add(defaultResult);
+            }
+        }
+
+        // 2. 학생별로 그룹핑
+        List<Map<String, Object>> groupedStudents = groupStudentsByStudent(allResults);
+
+        // 3. 필터링 적용
+        List<Map<String, Object>> filteredStudents = groupedStudents.stream()
+                .filter(student -> {
+                    if (collegeId != null) {
+                        Map<String, Object> studentData = (Map<String, Object>) student.get("student");
+                        Map<String, Object> department = (Map<String, Object>) studentData.get("department");
+                        Map<String, Object> college = (Map<String, Object>) department.get("college");
+                        if (!collegeId.equals(college.get("id"))) {
+                            return false;
+                        }
+                    }
+                    if (departmentId != null) {
+                        Map<String, Object> studentData = (Map<String, Object>) student.get("student");
+                        Map<String, Object> department = (Map<String, Object>) studentData.get("department");
+                        if (!departmentId.equals(department.get("id"))) {
+                            return false;
+                        }
+                    }
+                    if (riskLevel != null && !riskLevel.isEmpty()) {
+                        if (!riskLevel.equals(student.get("highestRisk"))) {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .sorted((s1, s2) -> {
+                    Integer id1 = (Integer) s1.get("studentId");
+                    Integer id2 = (Integer) s2.get("studentId");
+                    return id1.compareTo(id2);
+                })
+                .collect(Collectors.toList());
+
+        // 4. 페이징 처리
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), filteredStudents.size());
+
+        List<Map<String, Object>> pageContent = filteredStudents.subList(start, end);
+
+        return new PageImpl<>(pageContent, pageable, filteredStudents.size());
+    }
+
+    /**
+     * 위험 학생 분석 결과 조회 (페이징) - 학생별로 그룹핑
+     */
+    @Transactional(readOnly = true)
+    public Page<Map<String, Object>> getRiskStudentsGroupedByStudent(
+            Integer collegeId,
+            Integer departmentId,
+            String riskLevel,
+            String searchTerm,
+            Pageable pageable) {
+
+        // 1. 모든 분석 결과 조회
+        List<StuSubDetail> allEnrollments = stuSubDetailRepository.findAllWithStudentAndSubject().stream()
+                .filter(e -> e.getStudent() != null && e.getSubject() != null)
+                .collect(Collectors.toList());
+
+        List<AIAnalysisResult> existingResults = aiAnalysisResultRepository.findAllWithRelations();
+
+        Map<String, AIAnalysisResult> resultMap = existingResults.stream()
+                .collect(Collectors.toMap(
+                        result -> result.getStudentId() + "-" + result.getSubjectId(),
+                        result -> result,
+                        (existing, replacement) ->
+                                existing.getAnalyzedAt().isAfter(replacement.getAnalyzedAt())
+                                        ? existing : replacement
+                ));
+
+        List<AIAnalysisResult> allResults = new ArrayList<>();
+
+        for (StuSubDetail enrollment : allEnrollments) {
+            String key = enrollment.getStudentId() + "-" + enrollment.getSubjectId();
+
+            if (resultMap.containsKey(key)) {
+                allResults.add(resultMap.get(key));
+            }
+        }
+
+        // 2. 학생별로 그룹핑
+        List<Map<String, Object>> groupedStudents = groupStudentsByStudent(allResults);
+
+        // 3. 위험 학생만 필터링 (RISK, CRITICAL)
+        List<Map<String, Object>> riskStudents = groupedStudents.stream()
+                .filter(student -> {
+                    String risk = (String) student.get("highestRisk");
+                    return "RISK".equals(risk) || "CRITICAL".equals(risk);
+                })
+                .collect(Collectors.toList());
+
+        // 4. 필터링 적용 (단과대학, 학과, 위험도, 검색어)
+        List<Map<String, Object>> filteredStudents = riskStudents.stream()
+                .filter(student -> {
+                    if (collegeId != null) {
+                        Map<String, Object> studentData = (Map<String, Object>) student.get("student");
+                        if (studentData == null) return false;
+                        Map<String, Object> department = (Map<String, Object>) studentData.get("department");
+                        if (department == null) return false;
+                        Map<String, Object> college = (Map<String, Object>) department.get("college");
+                        if (college == null) return false;
+                        if (!collegeId.equals(college.get("id"))) {
+                            return false;
+                        }
+                    }
+                    if (departmentId != null) {
+                        Map<String, Object> studentData = (Map<String, Object>) student.get("student");
+                        if (studentData == null) return false;
+                        Map<String, Object> department = (Map<String, Object>) studentData.get("department");
+                        if (department == null) return false;
+                        if (!departmentId.equals(department.get("id"))) {
+                            return false;
+                        }
+                    }
+                    if (riskLevel != null && !riskLevel.isEmpty()) {
+                        if (!riskLevel.equals(student.get("highestRisk"))) {
+                            return false;
+                        }
+                    }
+                    if (searchTerm != null && !searchTerm.isEmpty()) {
+                        String term = searchTerm.toLowerCase();
+                        Integer studentId = (Integer) student.get("studentId");
+                        Map<String, Object> studentData = (Map<String, Object>) student.get("student");
+                        if (studentData == null) return false;
+                        String name = (String) studentData.get("name");
+                        Map<String, Object> department = (Map<String, Object>) studentData.get("department");
+                        String deptName = department != null ? (String) department.get("name") : "";
+
+                        boolean matches = String.valueOf(studentId).toLowerCase().contains(term) ||
+                                (name != null && name.toLowerCase().contains(term)) ||
+                                (deptName != null && deptName.toLowerCase().contains(term));
+                        if (!matches) {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .sorted((s1, s2) -> {
+                    Integer id1 = (Integer) s1.get("studentId");
+                    Integer id2 = (Integer) s2.get("studentId");
+                    return id1.compareTo(id2);
+                })
+                .collect(Collectors.toList());
+
+        // 5. 페이징 처리
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), filteredStudents.size());
+
+        List<Map<String, Object>> pageContent = filteredStudents.subList(start, end);
+
+        return new PageImpl<>(pageContent, pageable, filteredStudents.size());
+    }
+
+    /**
+     * 학생별로 그룹핑하는 헬퍼 메서드
+     */
+    private List<Map<String, Object>> groupStudentsByStudent(List<AIAnalysisResult> analysisResults) {
+        Map<Integer, Map<String, Object>> studentMap = new java.util.HashMap<>();
+
+        for (AIAnalysisResult result : analysisResults) {
+            Integer studentId = result.getStudentId();
+
+            if (!studentMap.containsKey(studentId)) {
+                Map<String, Object> studentData = new java.util.HashMap<>();
+                studentData.put("studentId", studentId);
+                studentData.put("student", convertStudentToMap(result.getStudent()));
+                studentData.put("subjects", new ArrayList<AIAnalysisResult>());
+                studentData.put("highestRisk", "NORMAL");
+                studentData.put("riskPriority", 0);
+                studentData.put("criticalSubjects", new ArrayList<AIAnalysisResult>());
+                studentData.put("riskSubjects", new ArrayList<AIAnalysisResult>());
+                studentMap.put(studentId, studentData);
+            }
+
+            Map<String, Object> studentData = studentMap.get(studentId);
+            ((List<AIAnalysisResult>) studentData.get("subjects")).add(result);
+
+            if ("CRITICAL".equals(result.getOverallRisk())) {
+                ((List<AIAnalysisResult>) studentData.get("criticalSubjects")).add(result);
+            } else if ("RISK".equals(result.getOverallRisk())) {
+                ((List<AIAnalysisResult>) studentData.get("riskSubjects")).add(result);
+            }
+
+            int riskPriority = getRiskPriority(result.getOverallRisk());
+            if (riskPriority > (Integer) studentData.get("riskPriority")) {
+                studentData.put("highestRisk", result.getOverallRisk());
+                studentData.put("riskPriority", riskPriority);
+            }
+        }
+
+        return new ArrayList<>(studentMap.values());
+    }
+
+    private Map<String, Object> convertStudentToMap(Student student) {
+        if (student == null) return null;
+
+        Map<String, Object> map = new java.util.HashMap<>();
+        map.put("id", student.getId());
+        map.put("name", student.getName());
+        map.put("grade", student.getGrade());
+
+        if (student.getDepartment() != null) {
+            Map<String, Object> deptMap = new java.util.HashMap<>();
+            deptMap.put("id", student.getDepartment().getId());
+            deptMap.put("name", student.getDepartment().getName());
+
+            if (student.getDepartment().getCollege() != null) {
+                Map<String, Object> collegeMap = new java.util.HashMap<>();
+                collegeMap.put("id", student.getDepartment().getCollege().getId());
+                collegeMap.put("name", student.getDepartment().getCollege().getName());
+                deptMap.put("college", collegeMap);
+            }
+
+            map.put("department", deptMap);
+        }
+
+        return map;
+    }
+
+    private int getRiskPriority(String risk) {
+        switch (risk) {
+            case "CRITICAL": return 4;
+            case "RISK": return 3;
+            case "CAUTION": return 2;
+            case "NORMAL": return 1;
+            default: return 0;
+        }
+    }
+
+    // ===================== 기존 분석 메서드들 (그대로 유지) =====================
+
     /**
      * AI 분석 실행 - DB에 저장
      */
     @Transactional
     public AIAnalysisResult analyzeStudent(Integer studentId, Integer subjectId,
                                            Integer year, Integer semester) {
-        // 기존 분석 결과 확인
         AIAnalysisResult existingResult = getLatestAnalysisResult(studentId, subjectId);
 
         StuSubDetail detail = stuSubDetailRepository
                 .findByStudentIdAndSubjectId(studentId, subjectId)
                 .orElse(null);
 
-        // 이미 오늘 분석한 결과가 있으면 업데이트, 없으면 새로 생성
         AIAnalysisResult result;
         if (existingResult != null &&
                 existingResult.getAnalyzedAt().toLocalDate().equals(LocalDateTime.now().toLocalDate())) {
@@ -270,7 +544,6 @@ public class AIAnalysisResultService {
             result.setSemester(semester);
         }
 
-        // 각 항목 분석
         result.setAttendanceStatus(analyzeAttendance(studentId, subjectId));
         result.setHomeworkStatus(analyzeHomework(studentId, subjectId));
         result.setMidtermStatus(analyzeMidterm(studentId, subjectId));
@@ -278,14 +551,10 @@ public class AIAnalysisResultService {
         result.setTuitionStatus(analyzeTuition(studentId, year, semester));
         result.setCounselingStatus(analyzeCounseling(studentId, subjectId));
 
-        // 이전 위험도 저장 (알림 발송 여부 판단용)
         String previousRisk = result.getOverallRisk();
-
-        // 종합 위험도 계산
         String newRisk = calculateOverallRisk(result);
         result.setOverallRisk(newRisk);
 
-        // RISK 또는 CRITICAL인 경우 AI 코멘트 생성
         if ("RISK".equals(newRisk) || "CRITICAL".equals(newRisk)) {
             try {
                 String aiComment = geminiService.generateRiskComment(result, detail);
@@ -295,7 +564,7 @@ public class AIAnalysisResultService {
                 result.setAnalysisDetail(null);
             }
         } else {
-            result.setAnalysisDetail(null); // NORMAL, CAUTION은 코멘트 없음
+            result.setAnalysisDetail(null);
         }
 
         AIAnalysisResult saved = aiAnalysisResultRepository.save(result);
@@ -303,16 +572,11 @@ public class AIAnalysisResultService {
         log.info("위험도 분석 결과: 학생 ID={}, 과목 ID={}, 이전 위험도={}, 새 위험도={}",
                 studentId, subjectId, previousRisk, newRisk);
 
-        // 위험도가 RISK 또는 CRITICAL인 경우 알림 발송
-        // 매일 자동 검사 시 위험/심각 상태면 알림 발송 (상태 변경 여부 무관)
-        // 단, 하루에 한 번만 알림 발송 (중복 방지)
-        // 주의(CAUTION) 이하로 호전되면 알림 안 감
         if (newRisk.equals("RISK") || newRisk.equals("CRITICAL")) {
             log.info("위험 알림 발송: 학생 ID={}, 과목 ID={}, 위험도={}",
                     studentId, subjectId, newRisk);
             sendRiskNotifications(saved, newRisk);
         } else {
-            // 주의 이하로 호전된 경우 알림 안 감
             log.debug("위험도가 NORMAL 또는 CAUTION: 학생 ID={}, 과목 ID={}, 위험도={}",
                     studentId, subjectId, newRisk);
         }
@@ -325,7 +589,6 @@ public class AIAnalysisResultService {
      */
     @Transactional
     public int analyzeAllStudentsAndSubjects(Integer year, Integer semester) {
-        // 모든 학생-과목 조합 조회
         List<StuSubDetail> allEnrollments = stuSubDetailRepository.findAllWithStudentAndSubject();
 
         int successCount = 0;
@@ -646,14 +909,12 @@ public class AIAnalysisResultService {
      */
     @Transactional(readOnly = true)
     public List<AIAnalysisResult> getAdvisorStudents(Integer advisorId) {
-        // 1. 담당 학생 목록 조회
         List<Student> advisorStudents = studentJpaRepository.findByAdvisorId(advisorId);
 
         if (advisorStudents.isEmpty()) {
             return new ArrayList<>();
         }
 
-        // 2. 담당 학생들의 모든 수강 과목 조회
         List<Integer> studentIds = advisorStudents.stream()
                 .map(Student::getId)
                 .collect(Collectors.toList());
@@ -663,10 +924,8 @@ public class AIAnalysisResultService {
                 .filter(e -> e.getStudent() != null && e.getSubject() != null)
                 .collect(Collectors.toList());
 
-        // 3. 기존 AI 분석 결과 조회 (담당 학생만)
         List<AIAnalysisResult> existingResults = aiAnalysisResultRepository.findByAdvisorIdWithRelations(advisorId);
 
-        // 4. 기존 분석 결과를 Map으로 변환 (최신 것만)
         Map<String, AIAnalysisResult> resultMap = existingResults.stream()
                 .collect(Collectors.toMap(
                         result -> result.getStudentId() + "-" + result.getSubjectId(),
@@ -676,20 +935,18 @@ public class AIAnalysisResultService {
                                         ? existing : replacement
                 ));
 
-        // 5. 모든 학생-과목에 대해 결과 생성
         List<AIAnalysisResult> allResults = new ArrayList<>();
 
         for (StuSubDetail enrollment : allEnrollments) {
             String key = enrollment.getStudentId() + "-" + enrollment.getSubjectId();
 
             if (resultMap.containsKey(key)) {
-                // DB에 저장된 분석 결과가 있으면 사용
                 allResults.add(resultMap.get(key));
             } else {
                 if (enrollment.getStudent() == null || enrollment.getSubject() == null) {
-                    continue;  // skip
+                    continue;
                 }
-                // DB에 없으면 기본값 생성 (아직 분석되지 않음)
+
                 AIAnalysisResult defaultResult = new AIAnalysisResult();
                 defaultResult.setStudentId(enrollment.getStudentId());
                 defaultResult.setSubjectId(enrollment.getSubjectId());
@@ -703,7 +960,7 @@ public class AIAnalysisResultService {
                 defaultResult.setTuitionStatus("NORMAL");
                 defaultResult.setCounselingStatus("NORMAL");
                 defaultResult.setOverallRisk("NORMAL");
-                defaultResult.setAnalyzedAt(null); // 아직 분석 안됨
+                defaultResult.setAnalyzedAt(null);
 
                 allResults.add(defaultResult);
             }
@@ -711,87 +968,176 @@ public class AIAnalysisResultService {
 
         return allResults;
     }
-        private void sendRiskNotifications(AIAnalysisResult result, String riskLevel) {
-            try {
-                Integer studentId = result.getStudentId();
-                Integer subjectId = result.getSubjectId();
 
-                if (studentId == null || subjectId == null) {
-                    log.warn("학생 ID 또는 과목 ID가 null입니다. 알림 발송 건너뜀.");
-                    return;
+    /**
+     * 교수 담당 학생 분석 결과 조회 (페이징) - 학생별로 그룹핑
+     */
+    @Transactional(readOnly = true)
+    public Page<Map<String, Object>> getAdvisorStudentsGroupedByStudent(
+            Integer advisorId,
+            String riskLevel,
+            Pageable pageable) {
+
+        // 1. 담당 학생 조회
+        List<Student> advisorStudents = studentJpaRepository.findByAdvisorId(advisorId);
+
+        if (advisorStudents.isEmpty()) {
+            return new PageImpl<>(new ArrayList<>(), pageable, 0);
+        }
+
+        List<Integer> studentIds = advisorStudents.stream()
+                .map(Student::getId)
+                .collect(Collectors.toList());
+
+        // 2. 모든 분석 결과 조회
+        List<StuSubDetail> allEnrollments = stuSubDetailRepository.findAllWithStudentAndSubject().stream()
+                .filter(e -> studentIds.contains(e.getStudentId()))
+                .filter(e -> e.getStudent() != null && e.getSubject() != null)
+                .collect(Collectors.toList());
+
+        List<AIAnalysisResult> existingResults = aiAnalysisResultRepository.findByAdvisorIdWithRelations(advisorId);
+
+        Map<String, AIAnalysisResult> resultMap = existingResults.stream()
+                .collect(Collectors.toMap(
+                        result -> result.getStudentId() + "-" + result.getSubjectId(),
+                        result -> result,
+                        (existing, replacement) ->
+                                existing.getAnalyzedAt().isAfter(replacement.getAnalyzedAt())
+                                        ? existing : replacement
+                ));
+
+        List<AIAnalysisResult> allResults = new ArrayList<>();
+
+        for (StuSubDetail enrollment : allEnrollments) {
+            String key = enrollment.getStudentId() + "-" + enrollment.getSubjectId();
+
+            if (resultMap.containsKey(key)) {
+                allResults.add(resultMap.get(key));
+            } else {
+                if (enrollment.getStudent() == null || enrollment.getSubject() == null) {
+                    continue;
                 }
 
-                // 학생 정보 조회
-                Student student = studentRepository.findById(studentId)
-                        .orElse(null);
-                if (student == null) {
-                    log.warn("학생을 찾을 수 없습니다. ID: {}", studentId);
-                    return;
-                }
+                AIAnalysisResult defaultResult = new AIAnalysisResult();
+                defaultResult.setStudentId(enrollment.getStudentId());
+                defaultResult.setSubjectId(enrollment.getSubjectId());
+                defaultResult.setStudent(enrollment.getStudent());
+                defaultResult.setSubject(enrollment.getSubject());
+                defaultResult.setAttendanceStatus("NORMAL");
+                defaultResult.setHomeworkStatus("NORMAL");
+                defaultResult.setMidtermStatus("NORMAL");
+                defaultResult.setFinalStatus("NORMAL");
+                defaultResult.setTuitionStatus("NORMAL");
+                defaultResult.setCounselingStatus("NORMAL");
+                defaultResult.setOverallRisk("NORMAL");
+                defaultResult.setAnalyzedAt(null);
 
-                // 과목 정보 조회 (교수 정보 포함)
-                Subject subject = subjectRepository.findById(subjectId)
-                        .orElse(null);
-                if (subject == null) {
-                    log.warn("과목을 찾을 수 없습니다. ID: {}", subjectId);
-                    return;
-                }
+                allResults.add(defaultResult);
+            }
+        }
 
-                if (subject.getProfessor() == null) {
-                    log.warn("과목에 교수 정보가 없습니다. 과목 ID: {}", subjectId);
-                    return;
-                }
+        // 3. 학생별로 그룹핑
+        List<Map<String, Object>> groupedStudents = groupStudentsByStudent(allResults);
 
-                String studentName = student.getName();
-                String subjectName = subject.getName();
-                Integer professorId = subject.getProfessor().getId();
-                String professorName = subject.getProfessor().getName();
+        // 4. 필터링 적용
+        List<Map<String, Object>> filteredStudents = groupedStudents.stream()
+                .filter(student -> {
+                    if (riskLevel != null && !riskLevel.isEmpty()) {
+                        if (!riskLevel.equals(student.get("highestRisk"))) {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .sorted((s1, s2) -> {
+                    Integer id1 = (Integer) s1.get("studentId");
+                    Integer id2 = (Integer) s2.get("studentId");
+                    return id1.compareTo(id2);
+                })
+                .collect(Collectors.toList());
 
-                String riskLabel = riskLevel.equals("CRITICAL") ? "심각" : "위험";
+        // 5. 페이징 처리
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), filteredStudents.size());
 
-                // 오늘 이미 알림을 보냈는지 확인 (중복 방지)
-                // 학생에게는: 오늘 STUDENT_RISK_ALERT 타입의 알림이 있는지 확인
-                boolean studentNotifiedToday = notificationRepo.existsByUserIdAndTypeAndToday(
-                        studentId, "STUDENT_RISK_ALERT");
+        List<Map<String, Object>> pageContent = filteredStudents.subList(start, end);
 
-                // 학생에게 알림 (오늘 아직 안 보낸 경우)
-                if (!studentNotifiedToday) {
-                    String studentMessage = String.format(
-                            "%s 과목에서 %s 상태가 감지되었습니다. 상담을 받으시기 바랍니다.",
-                            subjectName,
-                            riskLabel
-                    );
-                    notificationService.createNotification(
-                            studentId,
-                            "STUDENT_RISK_ALERT",
-                            studentMessage,
-                            null
-                    );
-                    log.info("학생에게 위험 알림 발송: 학생={}, 과목={}, 위험도={}", studentName, subjectName, riskLevel);
-                } else {
-                    log.info("학생에게 오늘 이미 알림을 보냈으므로 건너뜀: 학생 ID={}", studentId);
-                }
+        return new PageImpl<>(pageContent, pageable, filteredStudents.size());
+    }
 
-                // 교수에게 알림
-                // 같은 교수가 여러 학생의 위험 알림을 받을 수 있으므로,
-                // 각 학생-과목 조합마다 알림을 보냄
-                String professorMessage = String.format(
-                        "%s 학생이 %s 과목에서 %s 상태입니다. 상담이 필요합니다.",
-                        studentName,
+    private void sendRiskNotifications(AIAnalysisResult result, String riskLevel) {
+        try {
+            Integer studentId = result.getStudentId();
+            Integer subjectId = result.getSubjectId();
+
+            if (studentId == null || subjectId == null) {
+                log.warn("학생 ID 또는 과목 ID가 null입니다. 알림 발송 건너뜀.");
+                return;
+            }
+
+            Student student = studentRepository.findById(studentId)
+                    .orElse(null);
+            if (student == null) {
+                log.warn("학생을 찾을 수 없습니다. ID: {}", studentId);
+                return;
+            }
+
+            Subject subject = subjectRepository.findById(subjectId)
+                    .orElse(null);
+            if (subject == null) {
+                log.warn("과목을 찾을 수 없습니다. ID: {}", subjectId);
+                return;
+            }
+
+            if (subject.getProfessor() == null) {
+                log.warn("과목에 교수 정보가 없습니다. 과목 ID: {}", subjectId);
+                return;
+            }
+
+            String studentName = student.getName();
+            String subjectName = subject.getName();
+            Integer professorId = subject.getProfessor().getId();
+            String professorName = subject.getProfessor().getName();
+
+            String riskLabel = riskLevel.equals("CRITICAL") ? "심각" : "위험";
+
+            boolean studentNotifiedToday = notificationRepo.existsByUserIdAndTypeAndToday(
+                    studentId, "STUDENT_RISK_ALERT");
+
+            if (!studentNotifiedToday) {
+                String studentMessage = String.format(
+                        "%s 과목에서 %s 상태가 감지되었습니다. 상담을 받으시기 바랍니다.",
                         subjectName,
                         riskLabel
                 );
                 notificationService.createNotification(
-                        professorId,
-                        "PROFESSOR_RISK_ALERT",
-                        professorMessage,
+                        studentId,
+                        "STUDENT_RISK_ALERT",
+                        studentMessage,
                         null
                 );
-                log.info("교수에게 위험 알림 발송: 교수={}, 학생={}, 과목={}, 위험도={}",
-                        professorName, studentName, subjectName, riskLevel);
-
-            } catch (Exception e) {
-                log.error("위험 알림 발송 실패: " + e.getMessage(), e);
+                log.info("학생에게 위험 알림 발송: 학생={}, 과목={}, 위험도={}", studentName, subjectName, riskLevel);
+            } else {
+                log.info("학생에게 오늘 이미 알림을 보냈으므로 건너뜀: 학생 ID={}", studentId);
             }
+
+            String professorMessage = String.format(
+                    "%s 학생이 %s 과목에서 %s 상태입니다. 상담이 필요합니다.",
+                    studentName,
+                    subjectName,
+                    riskLabel
+            );
+            notificationService.createNotification(
+                    professorId,
+                    "PROFESSOR_RISK_ALERT",
+                    professorMessage,
+                    null
+            );
+            log.info("교수에게 위험 알림 발송: 교수={}, 학생={}, 과목={}, 위험도={}",
+                    professorName, studentName, subjectName, riskLevel);
+
+        } catch (Exception e) {
+            log.error("위험 알림 발송 실패: " + e.getMessage(), e);
         }
     }
+}

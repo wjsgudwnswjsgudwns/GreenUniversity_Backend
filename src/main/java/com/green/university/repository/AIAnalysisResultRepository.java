@@ -1,6 +1,8 @@
 package com.green.university.repository;
 
 import com.green.university.repository.model.AIAnalysisResult;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -79,4 +81,73 @@ public interface AIAnalysisResultRepository extends JpaRepository<AIAnalysisResu
             "WHERE s.advisorId = :advisorId " +
             "ORDER BY a.analyzedAt DESC")
     List<AIAnalysisResult> findByAdvisorIdWithRelations(@Param("advisorId") Integer advisorId);
+
+    // ===================== 페이징용 새 메서드 =====================
+
+    /**
+     * 전체 학생 분석 결과 조회 (페이징) - 필터링 포함
+     * @param collegeId 단과대학 ID (null이면 전체)
+     * @param departmentId 학과 ID (null이면 전체)
+     * @param riskLevel 위험도 (null이면 전체)
+     * @param pageable 페이징 정보
+     */
+    @Query("SELECT DISTINCT a FROM AIAnalysisResult a " +
+            "LEFT JOIN FETCH a.student s " +
+            "LEFT JOIN FETCH s.department d " +
+            "LEFT JOIN FETCH d.college c " +
+            "LEFT JOIN FETCH a.subject sub " +
+            "WHERE (:collegeId IS NULL OR c.id = :collegeId) " +
+            "AND (:departmentId IS NULL OR d.id = :departmentId) " +
+            "AND (:riskLevel IS NULL OR a.overallRisk = :riskLevel)")
+    Page<AIAnalysisResult> findAllWithFilters(
+            @Param("collegeId") Integer collegeId,
+            @Param("departmentId") Integer departmentId,
+            @Param("riskLevel") String riskLevel,
+            Pageable pageable
+    );
+
+    /**
+     * 위험 학생 분석 결과 조회 (페이징) - 필터링 포함
+     * RISK, CRITICAL만 조회
+     */
+    @Query("SELECT DISTINCT a FROM AIAnalysisResult a " +
+            "LEFT JOIN FETCH a.student s " +
+            "LEFT JOIN FETCH s.department d " +
+            "LEFT JOIN FETCH d.college c " +
+            "LEFT JOIN FETCH a.subject sub " +
+            "WHERE a.overallRisk IN ('RISK', 'CRITICAL') " +
+            "AND (:collegeId IS NULL OR c.id = :collegeId) " +
+            "AND (:departmentId IS NULL OR d.id = :departmentId) " +
+            "AND (:riskLevel IS NULL OR a.overallRisk = :riskLevel) " +
+            "AND (:searchTerm IS NULL OR " +
+            "     LOWER(CAST(s.id AS string)) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+            "     LOWER(s.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+            "     LOWER(d.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
+    Page<AIAnalysisResult> findRiskStudentsWithFilters(
+            @Param("collegeId") Integer collegeId,
+            @Param("departmentId") Integer departmentId,
+            @Param("riskLevel") String riskLevel,
+            @Param("searchTerm") String searchTerm,
+            Pageable pageable
+    );
+
+    /**
+     * 교수 담당 학생 분석 결과 조회 (페이징) - 필터링 포함
+     */
+    @Query("SELECT DISTINCT a FROM AIAnalysisResult a " +
+            "LEFT JOIN FETCH a.student s " +
+            "LEFT JOIN FETCH s.department d " +
+            "LEFT JOIN FETCH d.college c " +
+            "LEFT JOIN FETCH a.subject sub " +
+            "WHERE s.advisorId = :advisorId " +
+            "AND (:collegeId IS NULL OR c.id = :collegeId) " +
+            "AND (:departmentId IS NULL OR d.id = :departmentId) " +
+            "AND (:riskLevel IS NULL OR a.overallRisk = :riskLevel)")
+    Page<AIAnalysisResult> findByAdvisorIdWithFilters(
+            @Param("advisorId") Integer advisorId,
+            @Param("collegeId") Integer collegeId,
+            @Param("departmentId") Integer departmentId,
+            @Param("riskLevel") String riskLevel,
+            Pageable pageable
+    );
 }
