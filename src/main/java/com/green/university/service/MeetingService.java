@@ -6,11 +6,14 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import com.green.university.dto.ChatMessageDto;
+import com.green.university.dto.MediaStateSignalMessageDto;
 import com.green.university.dto.PresenceEventDto;
 import com.green.university.dto.response.MeetingJoinInfoResDto;
 import com.green.university.dto.response.MeetingPingResDto;
 import com.green.university.dto.response.MeetingSimpleResDto;
 import com.green.university.enums.MeetingStatus;
+import com.green.university.presence.MediaStateStore;
+import com.green.university.presence.PresenceStore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -27,6 +30,7 @@ import com.green.university.repository.MeetingParticipantJpaRepository;
 import com.green.university.repository.model.Meeting;
 import com.green.university.repository.model.MeetingParticipant;
 import com.green.university.repository.model.User;
+
 @Slf4j
 @Service
 public class MeetingService {
@@ -46,6 +50,10 @@ public class MeetingService {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
+    @Autowired
+    private PresenceStore presenceStore;
+    @Autowired
+    private MediaStateStore mediaStateStore;
     private final Random random = new Random();
 
     /**
@@ -451,51 +459,59 @@ public class MeetingService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-
         validateJoinWindow(meeting, now);
 
-        // 🔹 공통 헬퍼 사용
-        return upsertParticipantAndIssueSessionKey(meeting, principal);
+        Integer userId = principal.getId();
+        String dn = principal.getName();
+        if (dn == null || dn.isBlank()) dn = principal.getEmail();
+        if (dn == null || dn.isBlank()) dn = "참가자";
+
+        // HOST 여부는 meeting 기준으로 판단
+        String role = meeting.getHost() != null && meeting.getHost().getId().equals(userId)
+                ? "HOST"
+                : "PARTICIPANT";
+
+        // 메모리 기반 세션키 발급/교체
+        String sessionKey = presenceStore.joinOrReplace(meetingId, userId, dn, role);
+
+        // Presence JOIN 브로드캐스트
+        PresenceEventDto payload = PresenceEventDto.builder()
+                .type("JOIN")
+                .meetingId(meetingId)
+                .userId(userId)
+                .displayName(dn)
+                .role(role)
+                .joined(true)
+                .build();
+
+        messagingTemplate.convertAndSend(
+                String.format("/sub/meetings/%d/presence", meetingId),
+                payload
+        );
+
+        return sessionKey;
     }
+
 
     @Transactional
     public void leaveMeeting(Integer meetingId, PrincipalDto principal) {
-        Meeting meeting = findById(meetingId);
+        Integer userId = principal.getId();
+        presenceStore.leave(meetingId, userId);
+        mediaStateStore.remove(meetingId, userId); // 미디어 상태도 삭제
 
-        MeetingParticipant p =
-                meetingParticipantJpaRepository
-                        .findByMeeting_IdAndUser_Id(meetingId, principal.getId())
-                        .orElse(null);
-        if (p == null) {
-            return;
-        }
-        boolean wasJoined = "JOINED".equals(p.getStatus()) && p.getLeftAt() == null;
-        p.setStatus("LEFT");
-        p.setLeftAt(Timestamp.valueOf(LocalDateTime.now()));
-        meetingParticipantJpaRepository.save(p);
+        PresenceEventDto payload = PresenceEventDto.builder()
+                .type("LEAVE")
+                .meetingId(meetingId)
+                .userId(userId)
+                .joined(false)
+                .build();
 
-        if (wasJoined) {
-            ChatMessageDto systemMsg = meetingChatService.saveSystemMessage(
-                    meetingId,
-                    principal.getName() + " 님이 회의에서 나갔습니다."
-            );
-            messagingTemplate.convertAndSend(
-                    String.format("/sub/meetings/%d/chat", meetingId),
-                    systemMsg
-            );
-            broadcastPresenceLeave(meetingId, p.getUser().getId());
-        }
-        // 이 회의에 JOINED 상태의 사람이 아직 있는지 확인
-        boolean hasJoined =
-                meetingParticipantJpaRepository.existsByMeeting_IdAndStatus(meetingId, "JOINED");
-
-        if (!hasJoined) {
-            // 아무도 없으면 방이 '비어 있음'
-            meeting.setLastEmptyAt(Timestamp.valueOf(LocalDateTime.now()));
-            meeting.setUpdatedAt(Timestamp.valueOf(LocalDateTime.now()));
-            meetingJpaRepository.save(meeting);
-        }
+        messagingTemplate.convertAndSend(
+                String.format("/sub/meetings/%d/presence", meetingId),
+                payload
+        );
     }
+
 
     @Transactional
     public MeetingPingResDto ping(Integer meetingId,
@@ -514,28 +530,18 @@ public class MeetingService {
             return MeetingPingResDto.inactive("MEETING_FINISHED");
         }
 
-        // 2) 내 참가 정보 조회
-        MeetingParticipant p = meetingParticipantJpaRepository
-                .findByMeeting_IdAndUser_Id(meetingId, principal.getId())
-                .orElse(null);
+        Integer userId = principal.getId();
 
-        if (p == null) {
+        // 메모리 기반 유효성 체크
+        com.green.university.presence.PresenceStore.State s = presenceStore.get(meetingId, userId);
+        if (s == null) {
             return MeetingPingResDto.inactive("NOT_JOINED");
         }
 
-        // 3) 세션키 비교 (다른 브라우저에서 재접속한 경우)
-        String serverSessionKey = p.getSessionKey();
-        if (serverSessionKey != null
-                && clientSessionKey != null
-                && !serverSessionKey.equals(clientSessionKey)) {
-
-            // 이 브라우저는 더 이상 유효하지 않은 옛날 세션
+        boolean ok = presenceStore.heartbeat(meetingId, userId, clientSessionKey);
+        if (!ok) {
             return MeetingPingResDto.inactive("SESSION_REPLACED");
         }
-
-        // 4) 여기까지 왔으면 "유효한 현재 세션" → heartbeat 갱신
-        p.setLastActiveAt(Timestamp.valueOf(now));
-        meetingParticipantJpaRepository.save(p);
 
         MeetingPingResDto dto = new MeetingPingResDto();
         dto.setActive(true);
@@ -543,42 +549,19 @@ public class MeetingService {
         return dto;
     }
 
+
     @Transactional(readOnly = true)
     public void broadcastPresenceSync(Integer meetingId) {
+        List<PresenceStore.State> list = presenceStore.list(meetingId);
 
-        List<MeetingParticipant> joined =
-                meetingParticipantJpaRepository.findByMeeting_IdAndStatus(meetingId, "JOINED");
-
-        // userId 기준 dedupe + 순서 유지
-        Map<Integer, PresenceEventDto.ParticipantDto> uniq = new LinkedHashMap<>();
-
-        for (MeetingParticipant p : joined) {
-            if (p == null) continue;
-
-            Integer userId = (p.getUser() != null ? p.getUser().getId() : null);
-            if (userId == null) continue;
-
-            String displayName =
-                    (p.getDisplayName() != null && !p.getDisplayName().isBlank())
-                            ? p.getDisplayName()
-                            : (p.getEmail() != null ? p.getEmail() : "참가자");
-
-            String role =
-                    (p.getRole() != null && !p.getRole().isBlank())
-                            ? p.getRole()
-                            : "PARTICIPANT";
-
-            uniq.put(userId,
-                    PresenceEventDto.ParticipantDto.builder()
-                            .userId(userId)
-                            .displayName(displayName)
-                            .role(role)
-                            .joined(true)
-                            .build()
-            );
-        }
-
-        List<PresenceEventDto.ParticipantDto> participants = new ArrayList<>(uniq.values());
+        List<PresenceEventDto.ParticipantDto> participants = list.stream()
+                .map(s -> PresenceEventDto.ParticipantDto.builder()
+                        .userId(s.getUserId())
+                        .displayName(s.getDisplayName())
+                        .role(s.getRole())
+                        .joined(true)
+                        .build())
+                .toList();
 
         PresenceEventDto payload = PresenceEventDto.builder()
                 .type("SYNC")
@@ -591,7 +574,33 @@ public class MeetingService {
                 payload
         );
 
-        log.debug("[Presence] SYNC sent meetingId={}, size={}", meetingId, participants.size());
+        log.debug("[Presence] SYNC(sent from memory) meetingId={}, size={}", meetingId, participants.size());
+
+        // presence SYNC 후 각 참가자의 미디어 상태도 방송하여 새로 입장한 사용자가 즉시 상태를 알 수 있게 함
+        broadcastMediaStateSync(meetingId);
+    }
+
+    @Transactional(readOnly = true)
+    public void broadcastMediaStateSync(Integer meetingId) {
+        List<MediaStateStore.State> list = mediaStateStore.list(meetingId);
+        if (list == null || list.isEmpty()) return;
+
+        for (MediaStateStore.State s : list) {
+            if (s == null) continue;
+            MediaStateSignalMessageDto msg = new MediaStateSignalMessageDto();
+            msg.setMeetingId(meetingId);
+            msg.setUserId(s.getUserId());
+            msg.setDisplay(s.getDisplay());
+            msg.setAudio(s.getAudio());
+            msg.setVideo(s.getVideo());
+            msg.setVideoDeviceLost(s.getVideoDeviceLost());
+            msg.setType("MEDIA_STATE");
+
+            messagingTemplate.convertAndSend(
+                    String.format("/sub/meetings/%d/signals", meetingId),
+                    msg
+            );
+        }
     }
 
     private void broadcastPresenceJoin(Integer meetingId, MeetingParticipant p) {
@@ -626,6 +635,22 @@ public class MeetingService {
                 String.format("/sub/meetings/%d/presence", meetingId),
                 payload
         );
+    }
+    @Transactional
+    public void leaveKeepalive(Integer meetingId, String sessionKey) {
+        Integer userId = presenceStore.findUserIdBySessionKey(meetingId, sessionKey);
+        if (userId == null) return;
+        presenceStore.leave(meetingId, userId);
+        mediaStateStore.remove(meetingId, userId); // 미디어 상태도 삭제
+
+        PresenceEventDto payload = PresenceEventDto.builder()
+                .type("LEAVE")
+                .meetingId(meetingId)
+                .userId(userId)
+                .joined(false)
+                .build();
+
+        messagingTemplate.convertAndSend("/sub/meetings/" + meetingId + "/presence", payload);
     }
 
 }

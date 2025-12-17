@@ -11,21 +11,14 @@ import java.util.List;
 @Builder
 public class PresenceEventDto {
 
-    /**
-     * JOIN | LEAVE | SYNC
-     */
-    private String type;
-
+    private String type; // JOIN | LEAVE | FORCE_LEAVE | SYNC
     private Integer meetingId;
-
-    // 단일 이벤트용
     private Integer userId;
-    private String displayName;
-    private String role;
     private Boolean joined;
+    private String displayName;
+    private String role; // HOST | PARTICIPANT
 
-    // SYNC용
-    private List<ParticipantDto> participants;
+    private List<ParticipantDto> participants; // SYNC용
 
     @Getter @Setter
     @NoArgsConstructor
@@ -35,6 +28,6 @@ public class PresenceEventDto {
         private Integer userId;
         private String displayName;
         private String role;
-        private Boolean joined;
+        private boolean joined;
     }
 }
