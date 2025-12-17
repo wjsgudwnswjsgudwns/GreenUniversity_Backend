@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.green.university.jwt.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,7 +30,7 @@ public class SecurityConfig {
 
     // JwtAuthenticationFilter만 주입받음 (순환 참조 방지)
     private final JwtAuthenticationFilter authenticationFilter;
-    private final PasswordEncoder passwordEncoder;
+//    private final PasswordEncoder passwordEncoder;
 
 //    @Bean
 //    public PasswordEncoder passwordEncoder() {
@@ -52,9 +53,14 @@ public class SecurityConfig {
     }
 
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${spring.web.cors.allowed-origins:http://localhost:3000}") String origins
+    ) {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:3000"));
+
+        List<String> originList = List.of(origins.split("\\s*,\\s*"));
+        config.setAllowedOrigins(originList);
+
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("Authorization"));
@@ -65,25 +71,45 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", config);
         return source;
     }
+    @Bean
+    @org.springframework.core.annotation.Order(0)
+    public SecurityFilterChain wsChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/ws-chat/**")
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(AbstractHttpConfigurer::disable)
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .exceptionHandling(AbstractHttpConfigurer::disable); // ✅ entryPoint 타는 거 자체 차단(확실)
+
+        return http.build();
+    }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    @org.springframework.core.annotation.Order(1)
+    public SecurityFilterChain filterChain(
+                HttpSecurity http,
+                CorsConfigurationSource corsConfigurationSource
+    ) throws Exception {
+
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
                         // 인증 없이 접근 가능
-                        .requestMatchers("/api/**").permitAll()
+                        .requestMatchers("/ws-chat/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
-                        .requestMatchers("/ws-chat/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         // 인증 필요
                         .requestMatchers("/api/user/**").authenticated()
+
+                        //  그 외 /api 정책 (원하는대로)
+                        .requestMatchers("/api/**").permitAll()
 
                         // 나머지도 인증 필요
                         .anyRequest().authenticated()

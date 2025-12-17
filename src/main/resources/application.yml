@@ -1,5 +1,5 @@
 server:
-  port: 8881
+  port: ${SERVER_PORT:8881}
   servlet:
     encoding:
       charset: utf-8
@@ -26,11 +26,11 @@ spring:
       max-file-size: 20MB
       max-request-size: 20MB
   datasource:
-    url: jdbc:mysql://team2-free-project-mysql-db.crwceg2wuy6s.ap-northeast-2.rds.amazonaws.com/greendb
-    username: admin
-    password: 12345678
+    url: ${DB_URL:jdbc:mysql://team2-free-project-mysql-db.crwceg2wuy6s.ap-northeast-2.rds.amazonaws.com/greendb}
+    username: ${DB_USERNAME:admin}
+    password: ${DB_PASSWORD:12345678}
     driver-class-name: com.mysql.cj.jdbc.Driver
-  # Configure JPA/Hibernate settings
+
   jpa:
     hibernate:
       ddl-auto: none
@@ -38,17 +38,19 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.MySQL8Dialect
-    show-sql: true
+    show-sql: ${JPA_SHOW_SQL:false}
   sql:
     init:
-      mode: always
+      mode: ${SQL_INIT_MODE:never}
   web:
     cors:
-      allowed-origins: http://localhost:3000
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
       allowed-methods: GET,POST,PUT,DELETE
   output:
     ansi:
       enabled: always
+  security:
+    debug: true
 
 gemini:
   api:
@@ -57,5 +59,5 @@ gemini:
   # Removed mybatis configuration since the project now uses Spring Data JPA
 
 jwt:
-  secret: myScretKey0000fdafadsdfdsafdasffsafsafasfdfdfsdafafsasdyasdyasdasduasbdhafjkshfbahwefbakvbagkcvadsv
-  expiration: 36000000
+  secret: ${JWT_SECRET:myScretKey0000fdafadsdfdsafdasffsafsafasfdfdfsdafafsasdyasdyasdasduasbdhafjkshfbahwefbakvbagkcvadsv}
+  expiration: ${JWT_EXPIRATION:36000000}
