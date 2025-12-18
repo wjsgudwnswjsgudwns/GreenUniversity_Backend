@@ -13,10 +13,8 @@ import org.springframework.http.ResponseEntity;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.List;
-import java.util.ArrayList;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class GeminiService {
@@ -233,6 +231,147 @@ public class GeminiService {
             return "CAUTION";
         } else {
             return "NORMAL";
+        }
+    }
+
+    /**
+     * 학생의 학습 데이터를 기반으로 맞춤형 학습 조언 생성
+     */
+    public String generatePersonalizedAdvice(
+            String studentName,
+            String departmentName,
+            Integer grade,
+            Double gpa,
+            Double majorGPA,
+            Double attendanceRate,
+            String gradeTrend,
+            List<String> strongAreas,
+            List<String> weakAreas) {
+
+        try {
+            String prompt = String.format(
+                    "당신은 대학교 학습 지원 전문가입니다. 다음 학생의 데이터를 분석하여 구체적이고 실천 가능한 학습 조언을 제공해주세요.\n\n" +
+                            "=== 학생 정보 ===\n" +
+                            "이름: %s\n" +
+                            "학과: %s\n" +
+                            "학년: %d학년\n\n" +
+                            "=== 학업 성과 ===\n" +
+                            "전체 평점: %.2f/4.5\n" +
+                            "전공 평점: %.2f/4.5\n" +
+                            "출석률: %.1f%%\n" +
+                            "성적 추이: %s\n" +
+                            "강점 분야: %s\n" +
+                            "약점 분야: %s\n\n" +
+                            "=== 분석 요청 ===\n" +
+                            "1. 현재 학습 상태를 종합적으로 평가해주세요\n" +
+                            "2. 강점을 더 발전시킬 수 있는 방법을 제시해주세요\n" +
+                            "3. 약점을 보완하기 위한 구체적인 전략을 제안해주세요\n" +
+                            "4. 다음 학기 학습 계획에 대한 조언을 해주세요\n" +
+                            "5. 4-5문장으로 간결하고 실천 가능한 조언을 작성해주세요\n" +
+                            "6. 격려와 동기부여가 될 수 있도록 긍정적인 톤을 유지해주세요\n",
+                    studentName,
+                    departmentName,
+                    grade,
+                    gpa,
+                    majorGPA,
+                    attendanceRate,
+                    gradeTrend,
+                    String.join(", ", strongAreas.isEmpty() ? List.of("분석 중") : strongAreas),
+                    String.join(", ", weakAreas.isEmpty() ? List.of("없음") : weakAreas)
+            );
+
+            return callGeminiApi(prompt);
+
+        } catch (Exception e) {
+            System.err.println("맞춤형 조언 생성 실패: " + e.getMessage());
+            e.printStackTrace();
+            return "학습 데이터 분석 중 오류가 발생했습니다. 지속적인 노력으로 더 나은 성과를 기대합니다.";
+        }
+    }
+
+    /**
+     * 과목 추천 이유를 AI로 생성
+     */
+    public String generateSubjectRecommendReason(
+            String studentName,
+            String subjectName,
+            String subjectType,
+            String professorName,
+            Double studentGPA,
+            List<String> strongAreas,
+            List<String> completedSimilarSubjects) {
+
+        try {
+            String prompt = String.format(
+                    "학생에게 과목을 추천하는 이유를 2-3문장으로 작성해주세요.\n\n" +
+                            "학생: %s (평점: %.2f)\n" +
+                            "추천 과목: %s (%s)\n" +
+                            "담당 교수: %s\n" +
+                            "학생의 강점: %s\n" +
+                            "이미 수강한 유사 과목: %s\n\n" +
+                            "왜 이 학생에게 이 과목이 적합한지 구체적이고 설득력 있게 설명해주세요.",
+                    studentName,
+                    studentGPA,
+                    subjectName,
+                    subjectType,
+                    professorName,
+                    String.join(", ", strongAreas),
+                    completedSimilarSubjects.isEmpty() ? "없음" : String.join(", ", completedSimilarSubjects)
+            );
+
+            return callGeminiApi(prompt);
+
+        } catch (Exception e) {
+            System.err.println("추천 이유 생성 실패: " + e.getMessage());
+            return "학생의 학습 이력과 적성을 고려한 추천 과목입니다.";
+        }
+    }
+
+    /**
+     * 학습 전략 제안
+     */
+    public List<String> generateLearningStrategies(
+            Double currentGPA,
+            Double targetGPA,
+            String gradeTrend,
+            Double attendanceRate,
+            List<String> weakAreas) {
+
+        try {
+            String prompt = String.format(
+                    "학생의 학습 전략을 수립해주세요.\n\n" +
+                            "현재 평점: %.2f\n" +
+                            "목표 평점: %.2f\n" +
+                            "성적 추이: %s\n" +
+                            "출석률: %.1f%%\n" +
+                            "보완 필요 분야: %s\n\n" +
+                            "구체적이고 실천 가능한 학습 전략 5가지를 제시해주세요.\n" +
+                            "각 전략은 한 문장으로 작성하고, 번호 없이 각 줄마다 하나씩 작성해주세요.",
+                    currentGPA,
+                    targetGPA,
+                    gradeTrend,
+                    attendanceRate,
+                    String.join(", ", weakAreas.isEmpty() ? List.of("없음") : weakAreas)
+            );
+
+            String response = callGeminiApi(prompt);
+
+            // 응답을 줄 단위로 분리
+            return Arrays.stream(response.split("\n"))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty() && !s.matches("^\\d+\\..*")) // 번호 제거
+                    .limit(5)
+                    .collect(Collectors.toList());
+
+        } catch (Exception e) {
+            System.err.println("학습 전략 생성 실패: " + e.getMessage());
+            return List.of(
+                    "꾸준한 출석과 수업 집중",
+                    "과제 계획적 수행",
+                    "복습 습관 형성",
+                    "스터디 그룹 활용",
+                    "교수님 면담 정기적 진행"
+            );
         }
     }
 }

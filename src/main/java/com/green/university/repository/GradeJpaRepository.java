@@ -10,6 +10,7 @@ import com.green.university.repository.model.Grade;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * JPA repository for {@link Grade} entities.
@@ -48,5 +49,10 @@ public interface GradeJpaRepository extends JpaRepository<Grade, String> {
 //
 ////    // 연도 누계성적 조회
 ////    public List<Grade> findByStudentIdAndSubYear(Integer studentId, Integer subYear);
+
+    /**
+     * 학점 문자로 환산 점수 조회
+     */
+    Optional<Grade> findByGrade(String grade);
 
 }

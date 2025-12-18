@@ -80,7 +80,7 @@ public class SecurityConfig {
                 .cors(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
-                .exceptionHandling(AbstractHttpConfigurer::disable); // ✅ entryPoint 타는 거 자체 차단(확실)
+                .exceptionHandling(AbstractHttpConfigurer::disable); // entryPoint 타는 거 자체 차단(확실)
 
         return http.build();
     }
@@ -100,10 +100,10 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         // 인증 없이 접근 가능
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/ws-chat/**").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         // 인증 필요
                         .requestMatchers("/api/user/**").authenticated()

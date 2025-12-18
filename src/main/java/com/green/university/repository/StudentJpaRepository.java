@@ -60,4 +60,6 @@ public interface StudentJpaRepository extends JpaRepository<Student, Integer> {
      * 특정 교수를 담당 교수로 하는 학생 목록을 조회합니다.
      */
     List<Student> findByAdvisorId(Integer advisorId);
+
+    List<Student> findByGrade(Integer grade);
 }
