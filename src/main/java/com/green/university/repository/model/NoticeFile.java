@@ -1,13 +1,12 @@
 package com.green.university.repository.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import com.green.university.repository.model.Notice;
 
 import lombok.Data;
@@ -37,6 +36,7 @@ public class NoticeFile {
      */
     @ManyToOne
     @JoinColumn(name = "notice_id", nullable = false)
+    @JsonIgnore
     private Notice notice;
 
     @Column(name = "notice_id", insertable = false, updatable = false)
