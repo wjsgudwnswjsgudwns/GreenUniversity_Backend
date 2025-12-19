@@ -63,8 +63,8 @@ public class ProfessorController {
         List<Subject> subjectList = professorService.selectSubjectBySemester(
                 new SubjectPeriodForProfessorDto(
                         professorId,
-                        Define.CURRENT_YEAR,
-                        Define.CURRENT_SEMESTER
+                        Define.getCurrentYear(),
+                        Define.getCurrentSemester()
                 )
         );
 

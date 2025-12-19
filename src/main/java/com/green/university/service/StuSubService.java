@@ -59,8 +59,8 @@ public class StuSubService {
 
         return stuSubJpaRepository.findByStudentIdAndSubject_SubYearAndSubject_Semester(
                 studentId,
-                Define.CURRENT_YEAR,
-                Define.CURRENT_SEMESTER
+                Define.getCurrentYear(),
+                Define.getCurrentSemester()
         );
     }
 
@@ -115,7 +115,7 @@ public class StuSubService {
 
         // 본 수강 신청 완료된 과목들의 총 학점 계산 (ENROLLED만)
         List<StuSub> completedStuSubs = stuSubJpaRepository.findByStudentIdAndSubject_SubYearAndSubject_Semester(
-                studentId, Define.CURRENT_YEAR, Define.CURRENT_SEMESTER);
+                studentId, Define.getCurrentYear(), Define.getCurrentSemester());
 
         int sumGrades = completedStuSubs.stream()
                 .filter(ss -> "ENROLLED".equals(ss.getEnrollmentType()) && ss.getSubject() != null)
@@ -188,8 +188,8 @@ public class StuSubService {
 
         // 1. 정원 >= 예비신청인원인 강의 (자동 승인)
         List<Subject> approvedSubjects = subjectJpaRepository.findByCapacityGreaterThanEqualPreNumOfStudent(
-                Define.CURRENT_YEAR,
-                Define.CURRENT_SEMESTER
+                Define.getCurrentYear(),
+                Define.getCurrentSemester()
         );
 
         System.out.println("자동 승인 대상 과목 수: " + approvedSubjects.size());
@@ -222,8 +222,8 @@ public class StuSubService {
 
         // 2. 정원 < 예비신청인원인 강의 (수동 신청 필요 - enrollmentType은 PRE로 유지)
         List<Subject> overCapacitySubjects = subjectJpaRepository.findByCapacityLessThanPreNumOfStudent(
-                Define.CURRENT_YEAR,
-                Define.CURRENT_SEMESTER
+                Define.getCurrentYear(),
+                Define.getCurrentSemester()
         );
 
         System.out.println("정원 초과 과목 수: " + overCapacitySubjects.size());
@@ -253,8 +253,8 @@ public class StuSubService {
         // StuSub에서 enrollmentType="PRE"인 항목만 조회
         List<StuSub> preStuSubs = stuSubJpaRepository.findByStudentIdAndSubject_SubYearAndSubject_Semester(
                 studentId,
-                Define.CURRENT_YEAR,
-                Define.CURRENT_SEMESTER
+                Define.getCurrentYear(),
+                Define.getCurrentSemester()
         );
 
         // PRE 타입만 필터링하고 PreStuSub 객체로 변환

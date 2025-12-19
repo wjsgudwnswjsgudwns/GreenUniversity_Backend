@@ -189,14 +189,14 @@ public class SubjectService {
 	 */
 	@Transactional
 	public List<SubjectDto> readSubjectListByCurrentSemester() {
-        // 현재 학기의 강의만 필터링 (Define.CURRENT_YEAR, CURRENT_SEMESTER)
+        // 현재 학기의 강의만 필터링 (Define.getCurrentYear(), CURRENT_SEMESTER)
         List<SubjectDto> allList = readSubjectList();
         return allList.stream()
                 .filter(s ->
                         s.getSubYear() != null
                         && s.getSemester() != null
-                        && s.getSubYear() == Define.CURRENT_YEAR
-                        && s.getSemester() == Define.CURRENT_SEMESTER)
+                        && s.getSubYear() == Define.getCurrentYear()
+                        && s.getSemester() == Define.getCurrentSemester())
                 .collect(Collectors.toList());
 	}
 

@@ -19,13 +19,13 @@ public class SugangPeriodService {
     @Transactional(readOnly = true)
     public SugangPeriod getCurrentPeriod() {
         return sugangPeriodJpaRepository
-                .findByYearAndSemester(Define.CURRENT_YEAR, Define.CURRENT_SEMESTER)
+                .findByYearAndSemester(Define.getCurrentYear(), Define.getCurrentSemester())
                 .orElseGet(() -> {
                     // 없으면 생성
                     SugangPeriod newPeriod = new SugangPeriod();
                     newPeriod.setPeriod(0);
-                    newPeriod.setYear(Define.CURRENT_YEAR);
-                    newPeriod.setSemester(Define.CURRENT_SEMESTER);
+                    newPeriod.setYear(Define.getCurrentYear());
+                    newPeriod.setSemester(Define.getCurrentSemester());
                     return sugangPeriodJpaRepository.save(newPeriod);
                 });
     }

@@ -88,12 +88,12 @@
 								<tr>
 									<th>기 간</th>
 									<td colspan="3">
-										<%=Define.CURRENT_YEAR %>년도 <%=Define.CURRENT_SEMESTER %>학기부터
+										<%=Define.getCurrentYear() %>년도 <%=Define.getCurrentSemester() %>학기부터
 										&nbsp;
 										<select name="toYear">
-											<option value="<%=Define.CURRENT_YEAR %>" selected><%=Define.CURRENT_YEAR %>
-											<option value="<%=Define.CURRENT_YEAR + 1 %>"><%=Define.CURRENT_YEAR + 1 %>
-											<option value="<%=Define.CURRENT_YEAR + 2 %>"><%=Define.CURRENT_YEAR + 2 %>
+											<option value="<%=Define.getCurrentYear() %>" selected><%=Define.getCurrentYear() %>
+											<option value="<%=Define.getCurrentYear() + 1 %>"><%=Define.getCurrentYear() + 1 %>
+											<option value="<%=Define.getCurrentYear() + 2 %>"><%=Define.getCurrentYear() + 2 %>
 										</select>년도
 										<select name="toSemester">
 											<option value="1">1

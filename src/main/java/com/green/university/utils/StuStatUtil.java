@@ -28,15 +28,15 @@ public class StuStatUtil {
 			// 휴학 신청이 승인된 상태일 때
 			if (b.getStatus().equals("승인")) {
 				// 휴학 종료 연도가 현재 연도보다 이후라면 생성하지 않음
-				if (b.getToYear() > Define.CURRENT_YEAR) {
+				if (b.getToYear() > Define.getCurrentYear()) {
 					if (type.equals("등록금")) {
 						throw new CustomRestfullException("등록금 납부 대상이 아닙니다.", HttpStatus.BAD_REQUEST);
 					} else if (type.equals("수강신청")) {
 						throw new CustomRestfullException("수강 신청 대상이 아닙니다.", HttpStatus.BAD_REQUEST);
 					}
 				// 휴학 종료 연도가 현재 연도와 같을 경우
-				} else if (b.getToYear() == Define.CURRENT_YEAR) {
-					if (b.getToSemester() >= Define.CURRENT_SEMESTER) {
+				} else if (b.getToYear() == Define.getCurrentYear()) {
+					if (b.getToSemester() >= Define.getCurrentSemester()) {
 						if (type.equals("등록금")) {
 							throw new CustomRestfullException("등록금 납부 대상이 아닙니다.", HttpStatus.BAD_REQUEST);
 						} else if (type.equals("수강신청")) {

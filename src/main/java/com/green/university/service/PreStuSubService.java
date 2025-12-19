@@ -68,8 +68,8 @@ public class PreStuSubService {
         // StuSub에서 enrollmentType="PRE"인 항목 조회
         List<StuSub> preStuSubs = stuSubJpaRepository.findByStudentIdAndSubject_SubYearAndSubject_Semester(
                 studentId,
-                Define.CURRENT_YEAR,
-                Define.CURRENT_SEMESTER
+                Define.getCurrentYear(),
+                Define.getCurrentSemester()
         );
 
         // PRE 타입만 필터링하고 PreStuSub 객체로 변환
@@ -95,8 +95,8 @@ public class PreStuSubService {
         // 학점 체크
         List<StuSub> preStuSubs = stuSubJpaRepository.findByStudentIdAndSubject_SubYearAndSubject_Semester(
                 studentId,
-                Define.CURRENT_YEAR,
-                Define.CURRENT_SEMESTER
+                Define.getCurrentYear(),
+                Define.getCurrentSemester()
         );
 
         // PRE 타입만 필터링해서 학점 계산

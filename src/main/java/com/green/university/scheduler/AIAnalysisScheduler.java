@@ -34,14 +34,14 @@ public class AIAnalysisScheduler {
         System.out.println("====================================");
         System.out.println("정기 AI 분석 배치 시작");
         System.out.println("시작 시간: " + startTime.format(FORMATTER));
-        System.out.println("대상: " + Define.CURRENT_YEAR + "년 " + Define.CURRENT_SEMESTER + "학기");
+        System.out.println("대상: " + Define.getCurrentYear() + "년 " + Define.getCurrentSemester() + "학기");
         System.out.println("====================================");
 
         try {
             // 전체 학생-과목 AI 분석 실행
             int count = aiAnalysisResultService.analyzeAllStudentsAndSubjects(
-                    Define.CURRENT_YEAR,
-                    Define.CURRENT_SEMESTER
+                    Define.getCurrentYear(),
+                    Define.getCurrentSemester()
             );
 
             LocalDateTime endTime = LocalDateTime.now();
