@@ -597,6 +597,31 @@ public class UserService {
                         "사용자 정보를 찾을 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR));
     }
 
+    /**
+     * UserService.java에 이 메서드를 추가하세요
+     * 현재 사용자의 이메일 조회
+     */
+    @Transactional(readOnly = true)
+    public String getCurrentEmail(Integer userId, String userRole) {
+        if ("student".equals(userRole)) {
+            return studentJpaRepository.findById(userId)
+                    .map(Student::getEmail)
+                    .orElseThrow(() -> new CustomRestfullException(
+                            "학생 정보를 찾을 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR));
+        } else if ("professor".equals(userRole)) {
+            return professorJpaRepository.findById(userId)
+                    .map(com.green.university.repository.model.Professor::getEmail)
+                    .orElseThrow(() -> new CustomRestfullException(
+                            "교수 정보를 찾을 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR));
+        } else if ("staff".equals(userRole)) {
+            return staffJpaRepository.findById(userId)
+                    .map(Staff::getEmail)
+                    .orElseThrow(() -> new CustomRestfullException(
+                            "직원 정보를 찾을 수 없습니다.", HttpStatus.INTERNAL_SERVER_ERROR));
+        } else {
+            throw new CustomRestfullException("지원하지 않는 사용자 유형입니다.", HttpStatus.BAD_REQUEST);
+        }
+    }
 
 }
 
