@@ -46,7 +46,7 @@
 				<div>
 					<!-- 개설연도 숫자 -->
 					<label for="subYear">연도 </label> <input type="number"
-						value="<%=Define.CURRENT_YEAR%>" name="subYear" id="subYear"
+						value="<%=Define.getCurrentYear()%>" name="subYear" id="subYear"
 						min="2005" max="2023">
 					<!-- 개설학기 콤보박스-->
 					<label for="subSemester">학기 </label> <select name="semester"

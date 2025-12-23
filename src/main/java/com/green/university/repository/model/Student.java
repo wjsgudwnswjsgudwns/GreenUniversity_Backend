@@ -8,6 +8,7 @@ import lombok.Data;
 // 추가 import: Department 엔티티를 참조하기 위해 필요
 import com.green.university.repository.model.Department;
 
+import java.sql.Date;
 import java.util.List;
 
 @Data
@@ -24,7 +25,7 @@ public class Student {
     private String name;
 
     @Column(name = "birth_date", nullable = false)
-    private java.sql.Date birthDate;
+    private Date birthDate;
 
     @Column(name = "gender", nullable = false)
     private String gender;

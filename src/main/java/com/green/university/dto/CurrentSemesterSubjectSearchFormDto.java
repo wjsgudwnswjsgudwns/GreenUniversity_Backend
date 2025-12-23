@@ -13,8 +13,8 @@ public class CurrentSemesterSubjectSearchFormDto {
 	private Integer deptId;
 	private String name;
 	
-	private Integer subYear = Define.CURRENT_YEAR;
-	private Integer semester = Define.CURRENT_SEMESTER;
+	private Integer subYear = Define.getCurrentYear();
+	private Integer semester = Define.getCurrentSemester();
 	
 	private Integer page;
 	

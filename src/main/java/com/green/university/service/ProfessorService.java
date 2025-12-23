@@ -7,21 +7,22 @@ import java.util.stream.Collectors;
 import com.green.university.dto.response.*;
 import com.green.university.repository.*;
 import com.green.university.repository.model.*;
-import jakarta.persistence.criteria.Predicate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.green.university.dto.GradingPolicyDto;
 import com.green.university.dto.ProfessorListForm;
 import com.green.university.dto.SyllaBusFormDto;
 import com.green.university.dto.UpdateStudentGradeDto;
 import com.green.university.handler.exception.CustomRestfullException;
+
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class ProfessorService {
@@ -36,6 +37,12 @@ public class ProfessorService {
     private SyllaBusJpaRepository syllaBusJpaRepository;
     @Autowired
     private ProfessorJpaRepository professorJpaRepository;
+    
+    @Autowired
+    private GradeJpaRepository gradeJpaRepository;
+
+    // 과목별 가중치 정책 저장 (메모리 캐시, 향후 DB로 이전 가능)
+    private final ConcurrentHashMap<Integer, GradingPolicyDto> gradingPolicyCache = new ConcurrentHashMap<>();
 
 //    // AI 분석 서비스
 //    @Autowired
@@ -64,25 +71,105 @@ public class ProfessorService {
 
     public List<StuSubResponseDto> selectBySubjectId(Integer subjectId) {
         List<StuSub> stuSubs = stuSubJpaRepository.findBySubjectId(subjectId);
+        GradingPolicyDto policy = getGradingPolicy(subjectId);
 
-        return stuSubs.stream().map(stuSub -> {
+        // 1단계: 모든 학생 데이터 생성 및 환산 점수 계산
+        List<StuSubResponseDto> allStudents = new ArrayList<>();
+        
+        for (StuSub stuSub : stuSubs) {
             Student st = stuSub.getStudent();
             StuSubDetail detail = stuSubDetailJpaRepository
                     .findByStudentIdAndSubjectId(st.getId(), subjectId)
                     .orElse(new StuSubDetail());
 
-            return new StuSubResponseDto(
-                    st.getId(),
-                    st.getName(),
-                    st.getDepartment().getName(),
-                    detail.getAbsent(),
-                    detail.getLateness(),
-                    detail.getHomework(),
-                    detail.getMidExam(),
-                    detail.getFinalExam(),
-                    detail.getConvertedMark()
-            );
-        }).toList();
+            StuSubResponseDto dto = new StuSubResponseDto();
+            dto.setStudentId(st.getId());
+            dto.setStudentName(st.getName());
+            dto.setDeptName(st.getDepartment().getName());
+            dto.setAbsent(detail.getAbsent() != null ? detail.getAbsent() : 0);
+            dto.setLateness(detail.getLateness() != null ? detail.getLateness() : 0);
+            dto.setHomework(detail.getHomework() != null ? detail.getHomework() : 0);
+            dto.setMidExam(detail.getMidExam() != null ? detail.getMidExam() : 0);
+            dto.setFinalExam(detail.getFinalExam() != null ? detail.getFinalExam() : 0);
+            dto.setConvertedMark(detail.getConvertedMark());
+            dto.setCurrentGrade(stuSub.getGrade());
+            
+            // 환산 점수 계산
+            Double computedMark = calculateConvertedMark(detail, policy);
+            dto.setComputedMark(computedMark);
+            
+            allStudents.add(dto);
+        }
+
+        // 2단계: 결석 4회 이상인 학생을 F 그룹으로 분류
+        for (StuSubResponseDto student : allStudents) {
+            if (student.getAbsent() >= 4) {
+                student.setGroup("F");
+                student.setRecommendedGrade("F");
+            }
+        }
+
+        // 3단계: F 그룹이 아닌 학생들을 computedMark 기준으로 정렬하여 그룹 분류
+        List<StuSubResponseDto> nonFStudents = allStudents.stream()
+                .filter(s -> !"F".equals(s.getGroup()))
+                .filter(s -> s.getComputedMark() != null)
+                .sorted((a, b) -> Double.compare(
+                        b.getComputedMark() != null ? b.getComputedMark() : 0.0,
+                        a.getComputedMark() != null ? a.getComputedMark() : 0.0))
+                .collect(Collectors.toList());
+
+        int totalCount = nonFStudents.size();
+        if (totalCount > 0) {
+            int top30Count = (int) Math.ceil(totalCount * 0.3);
+            int middle40Count = (int) Math.ceil(totalCount * 0.4);
+            
+            for (int i = 0; i < nonFStudents.size(); i++) {
+                StuSubResponseDto student = nonFStudents.get(i);
+                if (i < top30Count) {
+                    // 상위 30%
+                    student.setGroup("A");
+                    student.setRecommendedGrade("A");
+                } else if (i < top30Count + middle40Count) {
+                    // 중간 40%
+                    student.setGroup("B");
+                    student.setRecommendedGrade("B");
+                } else {
+                    // 하위 30%
+                    student.setGroup("C");
+                    student.setRecommendedGrade("C");
+                }
+            }
+        }
+
+        // 4단계: computedMark가 null인 학생들은 C 그룹으로 분류
+        for (StuSubResponseDto student : allStudents) {
+            if (student.getGroup() == null) {
+                student.setGroup("C");
+                student.setRecommendedGrade("C");
+            }
+        }
+        
+        // 5단계: 최종 결과를 computedMark 기준 내림차순 정렬
+        allStudents.sort((a, b) -> {
+            // F 그룹은 항상 맨 아래로
+            boolean aIsF = "F".equals(a.getGroup());
+            boolean bIsF = "F".equals(b.getGroup());
+            if (aIsF && !bIsF) return 1;
+            if (!aIsF && bIsF) return -1;
+            
+            // F 그룹끼리는 결석 횟수 내림차순 (결석이 많은 순)
+            if (aIsF && bIsF) {
+                return Integer.compare(b.getAbsent() != null ? b.getAbsent() : 0,
+                                     a.getAbsent() != null ? a.getAbsent() : 0);
+            }
+            
+            // 나머지는 computedMark 기준 내림차순
+            Double aMark = a.getComputedMark() != null ? a.getComputedMark() : 0.0;
+            Double bMark = b.getComputedMark() != null ? b.getComputedMark() : 0.0;
+            return Double.compare(bMark, aMark);
+        });
+        
+        return allStudents;
     }
 
     @Transactional
@@ -138,9 +225,11 @@ public class ProfessorService {
 
         System.out.println("✅ StuSub 찾음");
 
-        stuSub.setGrade(updateStudentGradeDto.getGrade());
+        // Grade 값 검증 및 변환 (DB에 존재하는 형식으로 변환)
+        String gradeValue = validateAndConvertGrade(updateStudentGradeDto.getGrade());
+        stuSub.setGrade(gradeValue);
         stuSubJpaRepository.save(stuSub);
-        System.out.println("✅ StuSub 저장 완료");
+        System.out.println("✅ StuSub 저장 완료 - Grade: " + gradeValue);
 
         // ✅ AI 분석 트리거 (실시간)
 //        triggerAIAnalysis(updateStudentGradeDto.getStudentId(), updateStudentGradeDto.getSubjectId());
@@ -311,5 +400,139 @@ public class ProfessorService {
         }
 
         return studentList;
+    }
+
+    /**
+     * 과목별 가중치 정책 조회 (없으면 기본값 반환)
+     */
+    public GradingPolicyDto getGradingPolicy(Integer subjectId) {
+        return gradingPolicyCache.getOrDefault(subjectId, new GradingPolicyDto());
+    }
+
+    /**
+     * 과목별 가중치 정책 저장
+     */
+    public void saveGradingPolicy(Integer subjectId, GradingPolicyDto policy) {
+        // 가중치 합계 검증
+        int sum = policy.getAttendanceWeight() + policy.getHomeworkWeight() 
+                + policy.getMidtermWeight() + policy.getFinalWeight();
+        if (sum != 100) {
+            throw new CustomRestfullException("가중치 합계가 100이어야 합니다.", HttpStatus.BAD_REQUEST);
+        }
+        
+        gradingPolicyCache.put(subjectId, policy);
+    }
+
+    /**
+     * 환산 점수 계산
+     * 출결, 과제, 중간고사, 기말고사 점수를 가중치에 따라 계산
+     */
+    private Double calculateConvertedMark(StuSubDetail detail, GradingPolicyDto policy) {
+        if (detail == null || policy == null) {
+            return null;
+        }
+
+        // 출결 점수 계산
+        Integer absent = detail.getAbsent() != null ? detail.getAbsent() : 0;
+        Integer lateness = detail.getLateness() != null ? detail.getLateness() : 0;
+        
+        // 지각을 결석으로 환산 (초과분만)
+        int latenessAsAbsent = 0;
+        if (lateness > policy.getLatenessFreeCount()) {
+            int excessLateness = lateness - policy.getLatenessFreeCount();
+            latenessAsAbsent = excessLateness / policy.getLatenessPerAbsent();
+        }
+        int totalAbsent = absent + latenessAsAbsent;
+        
+        // 출결 점수: 출결 만점에서 결석/지각으로 인한 감점 계산
+        // 총 수업일수는 15주 기준으로 가정 (실제로는 Subject나 별도 설정 필요)
+        int totalClasses = 15;
+        double attendanceScore = Math.max(0, 
+            policy.getAttendanceMax() - (totalAbsent * policy.getAttendanceMax() / totalClasses));
+        
+        // 출결 점수에 지각 감점 추가 적용
+        if (lateness > policy.getLatenessFreeCount()) {
+            int excessLateness = lateness - policy.getLatenessFreeCount();
+            attendanceScore = Math.max(0, attendanceScore - (excessLateness * policy.getLatenessPenaltyPer()));
+        }
+        
+        double attendancePart = (attendanceScore / policy.getAttendanceMax()) * policy.getAttendanceWeight();
+
+        // 과제 점수 계산
+        Integer homework = detail.getHomework() != null ? detail.getHomework() : 0;
+        double homeworkPart = 0.0;
+        if (policy.getHomeworkMax() > 0) {
+            homeworkPart = ((double) homework / policy.getHomeworkMax()) * policy.getHomeworkWeight();
+        }
+
+        // 중간고사 점수 계산
+        Integer midExam = detail.getMidExam() != null ? detail.getMidExam() : 0;
+        double midtermPart = 0.0;
+        if (policy.getMidtermMax() > 0) {
+            midtermPart = ((double) midExam / policy.getMidtermMax()) * policy.getMidtermWeight();
+        }
+
+        // 기말고사 점수 계산
+        Integer finalExam = detail.getFinalExam() != null ? detail.getFinalExam() : 0;
+        double finalPart = 0.0;
+        if (policy.getFinalMax() > 0) {
+            finalPart = ((double) finalExam / policy.getFinalMax()) * policy.getFinalWeight();
+        }
+
+        // 최종 환산 점수 (소수점 둘째 자리까지 반올림)
+        double totalScore = attendancePart + homeworkPart + midtermPart + finalPart;
+        return Math.round(totalScore * 100.0) / 100.0;
+    }
+
+    /**
+     * Grade 값 검증 및 변환
+     * DB에 존재하지 않는 형식("A", "B", "C", "D")을 올바른 형식("A0", "B0", "C0", "D+")으로 변환
+     */
+    private String validateAndConvertGrade(String grade) {
+        if (grade == null || grade.trim().isEmpty()) {
+            throw new CustomRestfullException("등급 값이 필요합니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        String gradeTrimmed = grade.trim();
+
+        // 먼저 DB에 존재하는지 확인
+        boolean exists = gradeJpaRepository.existsById(gradeTrimmed);
+        if (exists) {
+            return gradeTrimmed;
+        }
+
+        // DB에 존재하지 않는 경우 변환 시도
+        String convertedGrade = convertGradeFormat(gradeTrimmed);
+        
+        // 변환된 값이 DB에 존재하는지 확인
+        if (gradeJpaRepository.existsById(convertedGrade)) {
+            System.out.println("⚠️ Grade 변환: " + gradeTrimmed + " -> " + convertedGrade);
+            return convertedGrade;
+        }
+
+        // 변환 후에도 존재하지 않으면 에러
+        throw new CustomRestfullException(
+                "유효하지 않은 등급 값입니다: " + gradeTrimmed + 
+                " (허용된 값: A+, A0, B+, B0, C+, C0, D+, F)", 
+                HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * Grade 형식 변환
+     * "A" -> "A0", "B" -> "B0", "C" -> "C0", "D" -> "D+"
+     */
+    private String convertGradeFormat(String grade) {
+        switch (grade.toUpperCase()) {
+            case "A":
+                return "A0";
+            case "B":
+                return "B0";
+            case "C":
+                return "C0";
+            case "D":
+                return "D+";
+            default:
+                return grade;
+        }
     }
 }

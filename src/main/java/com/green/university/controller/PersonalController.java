@@ -110,9 +110,24 @@ public class PersonalController {
     @PutMapping("/user/update")
     public ResponseEntity<?> updateUserProc(
             @Valid @RequestBody UserInfoForUpdateDto userInfoForUpdateDto,
-            @RequestParam String password) {
+            @RequestParam String password,
+            @RequestParam(required = false) Boolean emailVerified) {
 
         PrincipalDto principal = getCurrentUser();
+
+        // 이메일이 변경되었는지 확인
+        String currentEmail = userService.getCurrentEmail(principal.getId(), principal.getUserRole());
+        boolean emailChanged = !currentEmail.equals(userInfoForUpdateDto.getEmail());
+
+        // 이메일이 변경된 경우 인증 확인 (emailVerified 파라미터로 전달받음)
+        if (emailChanged) {
+            if (emailVerified == null || !emailVerified) {
+                throw new CustomRestfullException(
+                        "이메일이 변경되었습니다. 이메일 인증을 완료해주세요.",
+                        HttpStatus.BAD_REQUEST
+                );
+            }
+        }
 
         userService.updateUserProfileWithPasswordCheck(
                 principal.getId(),

@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -233,6 +234,11 @@ public class AdminService {
         }
         roomJpaRepository.deleteById(id);
         return 1;
+    }
+
+    // 모든 교수 조회 서비스
+    public List<Professor> readAllProfessors() {
+        return professorJpaRepository.findAll(Sort.by(Sort.Direction.ASC, "id"));
     }
 
 	// 강의 입력 서비스

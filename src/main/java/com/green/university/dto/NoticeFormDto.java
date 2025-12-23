@@ -27,7 +27,8 @@ public class NoticeFormDto {
 	private String content;
 	private Integer views;
 	private Timestamp createdTime;
-	private MultipartFile file;	
+	private MultipartFile file;	// 단일 파일 (하위 호환성)
+	private MultipartFile[] files; // 여러 파일
 	private String originFilename;
 	private String uuidFilename;
 	

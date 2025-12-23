@@ -37,3 +37,9 @@ out/
 ### VS Code ###
 .vscode/
 
+### Local Configuration Files (보안) ###
+application-local.yml
+application-local.properties
+*.local.yml
+*.local.properties
+

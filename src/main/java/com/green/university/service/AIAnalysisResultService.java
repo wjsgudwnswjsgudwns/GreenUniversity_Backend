@@ -50,6 +50,9 @@ public class AIAnalysisResultService {
     @Autowired
     private GeminiService geminiService;
 
+    @Autowired
+    private RiskEmailService riskEmailService;
+
     // ===================== 기존 메서드들 (그대로 유지) =====================
 
     /**
@@ -1065,6 +1068,10 @@ public class AIAnalysisResultService {
         return new PageImpl<>(pageContent, pageable, filteredStudents.size());
     }
 
+    /**
+     * 위험 알림 발송 (시스템 알림 + 이메일)
+     * 위험도가 변경되어 RISK 또는 CRITICAL이 되었을 때 호출됨
+     */
     private void sendRiskNotifications(AIAnalysisResult result, String riskLevel) {
         try {
             Integer studentId = result.getStudentId();
@@ -1075,32 +1082,23 @@ public class AIAnalysisResultService {
                 return;
             }
 
-            Student student = studentRepository.findById(studentId)
-                    .orElse(null);
+            Student student = studentRepository.findById(studentId).orElse(null);
             if (student == null) {
                 log.warn("학생을 찾을 수 없습니다. ID: {}", studentId);
                 return;
             }
 
-            Subject subject = subjectRepository.findById(subjectId)
-                    .orElse(null);
+            Subject subject = subjectRepository.findById(subjectId).orElse(null);
             if (subject == null) {
                 log.warn("과목을 찾을 수 없습니다. ID: {}", subjectId);
                 return;
             }
 
-            if (subject.getProfessor() == null) {
-                log.warn("과목에 교수 정보가 없습니다. 과목 ID: {}", subjectId);
-                return;
-            }
-
             String studentName = student.getName();
             String subjectName = subject.getName();
-            Integer professorId = subject.getProfessor().getId();
-            String professorName = subject.getProfessor().getName();
-
             String riskLabel = riskLevel.equals("CRITICAL") ? "심각" : "위험";
 
+            // 1. 시스템 알림 발송 (기존 로직 유지)
             boolean studentNotifiedToday = notificationRepo.existsByUserIdAndTypeAndToday(
                     studentId, "STUDENT_RISK_ALERT");
 
@@ -1116,25 +1114,51 @@ public class AIAnalysisResultService {
                         studentMessage,
                         null
                 );
-                log.info("학생에게 위험 알림 발송: 학생={}, 과목={}, 위험도={}", studentName, subjectName, riskLevel);
+                log.info("학생에게 시스템 알림 발송: 학생={}, 과목={}, 위험도={}",
+                        studentName, subjectName, riskLevel);
             } else {
-                log.info("학생에게 오늘 이미 알림을 보냈으므로 건너뜀: 학생 ID={}", studentId);
+                log.info("학생에게 오늘 이미 시스템 알림을 보냈으므로 건너뜀: 학생 ID={}", studentId);
             }
 
-            String professorMessage = String.format(
-                    "%s 학생이 %s 과목에서 %s 상태입니다. 상담이 필요합니다.",
-                    studentName,
-                    subjectName,
-                    riskLabel
-            );
-            notificationService.createNotification(
-                    professorId,
-                    "PROFESSOR_RISK_ALERT",
-                    professorMessage,
-                    null
-            );
-            log.info("교수에게 위험 알림 발송: 교수={}, 학생={}, 과목={}, 위험도={}",
-                    professorName, studentName, subjectName, riskLevel);
+            if (subject.getProfessor() != null) {
+                Integer professorId = subject.getProfessor().getId();
+                String professorName = subject.getProfessor().getName();
+
+                String professorMessage = String.format(
+                        "%s 학생이 %s 과목에서 %s 상태입니다. 상담이 필요합니다.",
+                        studentName,
+                        subjectName,
+                        riskLabel
+                );
+                notificationService.createNotification(
+                        professorId,
+                        "PROFESSOR_RISK_ALERT",
+                        professorMessage,
+                        null
+                );
+                log.info("교수에게 시스템 알림 발송: 교수={}, 학생={}, 과목={}, 위험도={}",
+                        professorName, studentName, subjectName, riskLevel);
+            }
+
+            // 2. 이메일 발송 (새로운 기능)
+            try {
+                // 학생에게 이메일 발송
+                riskEmailService.sendRiskEmailToStudent(student, subject, riskLevel, result);
+                log.info("학생 이메일 발송 완료: 학생={}, 이메일={}",
+                        studentName, student.getEmail());
+
+                // 지도교수에게 이메일 발송
+                if (student.getAdvisor() != null) {
+                    riskEmailService.sendRiskEmailToProfessor(student, subject, riskLevel, result);
+                    log.info("지도교수 이메일 발송 완료: 교수={}, 이메일={}",
+                            student.getAdvisor().getName(), student.getAdvisor().getEmail());
+                } else {
+                    log.warn("학생의 지도교수 정보가 없습니다. 학생 ID: {}", studentId);
+                }
+            } catch (Exception e) {
+                log.error("이메일 발송 중 오류 발생: " + e.getMessage(), e);
+                // 이메일 발송 실패해도 시스템 알림은 정상 발송되도록 예외를 잡음
+            }
 
         } catch (Exception e) {
             log.error("위험 알림 발송 실패: " + e.getMessage(), e);

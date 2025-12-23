@@ -1,5 +1,5 @@
 server:
-  port: 8881
+  port: ${SERVER_PORT:8881}
   servlet:
     encoding:
       charset: utf-8
@@ -26,11 +26,11 @@ spring:
       max-file-size: 20MB
       max-request-size: 20MB
   datasource:
-    url: jdbc:mysql://team2-free-project-mysql-db.crwceg2wuy6s.ap-northeast-2.rds.amazonaws.com/greendb
-    username: admin
-    password: 12345678
+    url: ${DB_URL:jdbc:mysql://team2-free-project-mysql-db.crwceg2wuy6s.ap-northeast-2.rds.amazonaws.com/greendb}
+    username: ${DB_USERNAME:admin}
+    password: ${DB_PASSWORD:12345678}
     driver-class-name: com.mysql.cj.jdbc.Driver
-  # Configure JPA/Hibernate settings
+
   jpa:
     hibernate:
       ddl-auto: none
@@ -38,24 +38,50 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.MySQL8Dialect
-    show-sql: true
+    show-sql: ${JPA_SHOW_SQL:false}
   sql:
     init:
-      mode: always
+      mode: ${SQL_INIT_MODE:never}
   web:
     cors:
-      allowed-origins: http://localhost:3000
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
       allowed-methods: GET,POST,PUT,DELETE
   output:
     ansi:
       enabled: always
+  security:
+    debug: true
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: jhjun7338@gmail.com
+    password: bmhq dynh jpix nggz
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 gemini:
   api:
-    key: AIzaSyCuwJczfx9WSZWm9xIUMPzEQoJg4nDbLFA
+    key: AIzaSyDk201IOhtTgnJep5J2UbnWEQlxWZPkXYE
 
   # Removed mybatis configuration since the project now uses Spring Data JPA
 
 jwt:
-  secret: myScretKey0000fdafadsdfdsafdasffsafsafasfdfdfsdafafsasdyasdyasdasduasbdhafjkshfbahwefbakvbagkcvadsv
-  expiration: 36000000
+  secret: ${JWT_SECRET:myScretKey0000fdafadsdfdsafdasffsafsafasfdfdfsdafafsasdyasdyasdasduasbdhafjkshfbahwefbakvbagkcvadsv}
+  expiration: ${JWT_EXPIRATION:36000000}
+
+aws:
+  s3:
+    bucket-name: ${AWS_S3_BUCKET_NAME:green-front-51217}
+    region: ${AWS_REGION:ap-northeast-2}
+    access-key: ${AWS_ACCESS_KEY:AKIA5HLHWYDFRNIS7JUC}
+    secret-key: ${AWS_SECRET_KEY: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}
+    base-url: ${AWS_S3_BASE_URL:https://green-front-51217.s3.ap-northeast-2.amazonaws.com}

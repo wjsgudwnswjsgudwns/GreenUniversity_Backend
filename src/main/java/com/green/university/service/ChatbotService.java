@@ -128,18 +128,18 @@ public class ChatbotService {
     private String getRegistrationStatus(Integer studentId) {
         try {
             Tuition tuition = tuitionService.readByStudentIdAndSemester(
-                    studentId, Define.CURRENT_YEAR, Define.CURRENT_SEMESTER);
+                    studentId, Define.getCurrentYear(), Define.getCurrentSemester());
 
             if (tuition == null) {
                 return String.format("【%d년 %d학기 등록 현황】\n\n" +
                         "등록금 고지서가 아직 발급되지 않았습니다.\n" +
                         "등록금 고지서 발급 후 등록금을 납부해주세요.", 
-                        Define.CURRENT_YEAR, Define.CURRENT_SEMESTER);
+                        Define.getCurrentYear(), Define.getCurrentSemester());
             }
 
             StringBuilder response = new StringBuilder();
             response.append(String.format("【%d년 %d학기 등록 현황】\n\n", 
-                    Define.CURRENT_YEAR, Define.CURRENT_SEMESTER));
+                    Define.getCurrentYear(), Define.getCurrentSemester()));
 
             if (tuition.getStatus() != null && tuition.getStatus()) {
                 response.append("등록 상태: ✅ 등록 완료\n");
@@ -174,12 +174,12 @@ public class ChatbotService {
 
             if (stuSubList.isEmpty()) {
                 return String.format("%d년 %d학기 수강 신청 내역이 없습니다.", 
-                        Define.CURRENT_YEAR, Define.CURRENT_SEMESTER);
+                        Define.getCurrentYear(), Define.getCurrentSemester());
             }
 
             StringBuilder response = new StringBuilder();
             response.append(String.format("【%d년 %d학기 수강 신청 내역】\n\n", 
-                    Define.CURRENT_YEAR, Define.CURRENT_SEMESTER));
+                    Define.getCurrentYear(), Define.getCurrentSemester()));
 
             int totalCredits = 0;
             for (StuSub stuSub : stuSubList) {
@@ -209,7 +209,7 @@ public class ChatbotService {
 
             StringBuilder response = new StringBuilder();
             response.append(String.format("【%d년 %d학기 학점】\n\n", 
-                    Define.CURRENT_YEAR, Define.CURRENT_SEMESTER));
+                    Define.getCurrentYear(), Define.getCurrentSemester()));
 
             if (currentSemester != null && currentSemester.getSumGrades() > 0) {
                 response.append(String.format("신청 학점: %d학점\n", currentSemester.getSumGrades()));
@@ -299,12 +299,12 @@ public class ChatbotService {
 
             if (stuSubList.isEmpty()) {
                 return String.format("%d년 %d학기 수강 신청 내역이 없습니다.", 
-                        Define.CURRENT_YEAR, Define.CURRENT_SEMESTER);
+                        Define.getCurrentYear(), Define.getCurrentSemester());
             }
 
             StringBuilder response = new StringBuilder();
             response.append(String.format("【%d년 %d학기 수강 과목】\n\n", 
-                    Define.CURRENT_YEAR, Define.CURRENT_SEMESTER));
+                    Define.getCurrentYear(), Define.getCurrentSemester()));
             response.append("아래 버튼을 클릭하여 각 강의의 상세 정보를 확인하세요.\n\n");
 
             int index = 1;
@@ -437,8 +437,8 @@ public class ChatbotService {
 
             // 현재 학기 제외한 나머지 학기들
             List<MyGradeDto> pastSemesters = semesterGrades.stream()
-                    .filter(g -> !(g.getSubYear().equals(Define.CURRENT_YEAR) && 
-                                  g.getSemester().equals(Define.CURRENT_SEMESTER)))
+                    .filter(g -> !(g.getSubYear().equals(Define.getCurrentYear()) && 
+                                  g.getSemester().equals(Define.getCurrentSemester())))
                     .collect(java.util.stream.Collectors.toList());
 
             if (pastSemesters.isEmpty()) {
