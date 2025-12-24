@@ -1,6 +1,6 @@
 package com.green.university.controller;
 
-import com.green.university.dto.AIResponseDTO;
+import com.green.university.repository.AIAnalysisResultRepository;
 import com.green.university.repository.StudentJpaRepository;
 import com.green.university.repository.SubjectJpaRepository;
 import com.green.university.repository.model.AIAnalysisResult;
@@ -17,124 +17,188 @@ import java.util.Map;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/test")
+@RequestMapping("/api/email-test")
 @RequiredArgsConstructor
 public class EmailTestController {
 
     private final RiskEmailService riskEmailService;
+    private final AIAnalysisResultRepository aiAnalysisResultRepository;
     private final StudentJpaRepository studentRepository;
     private final SubjectJpaRepository subjectRepository;
 
     /**
-     * 이메일 발송 테스트
-     * POST /api/test/send-risk-email
-     *
-     * Request Body:
-     * {
-     *   "studentId": 2023000011,
-     *   "subjectId": 1,
-     *   "riskLevel": "CRITICAL" 또는 "RISK"
-     * }
+     * 특정 학생에게 위험 알림 이메일 전송 테스트
+     * POST /api/email-test/send-to-student
      */
-    @PostMapping("/send-risk-email")
-    public ResponseEntity<?> testSendRiskEmail(@RequestBody EmailTestRequest request) {
+    @PostMapping("/send-to-student")
+    public ResponseEntity<?> sendEmailToStudent(@RequestBody Map<String, Integer> request) {
         try {
-            Integer studentId = request.getStudentId();
-            Integer subjectId = request.getSubjectId();
-            String riskLevel = request.getRiskLevel();
+            Integer analysisResultId = request.get("analysisResultId");
 
-            // 유효성 검사
-            if (studentId == null || subjectId == null || riskLevel == null) {
-                return ResponseEntity.badRequest()
-                        .body(new AIResponseDTO<>(0, "학생 ID, 과목 ID, 위험도를 모두 입력해주세요.", null));
+            if (analysisResultId == null) {
+                return ResponseEntity.badRequest().body(
+                        createResponse(false, "분석 결과 ID가 필요합니다.", null)
+                );
             }
 
-            if (!riskLevel.equals("RISK") && !riskLevel.equals("CRITICAL")) {
-                return ResponseEntity.badRequest()
-                        .body(new AIResponseDTO<>(0, "위험도는 RISK 또는 CRITICAL이어야 합니다.", null));
-            }
+            // AI 분석 결과 조회
+            AIAnalysisResult result = aiAnalysisResultRepository.findById(analysisResultId)
+                    .orElseThrow(() -> new RuntimeException("분석 결과를 찾을 수 없습니다."));
 
-            // 학생 조회
-            Student student = studentRepository.findById(studentId).orElse(null);
-            if (student == null) {
-                return ResponseEntity.badRequest()
-                        .body(new AIResponseDTO<>(0, "학생을 찾을 수 없습니다. ID: " + studentId, null));
-            }
+            // 학생 정보 조회
+            Student student = studentRepository.findById(result.getStudentId())
+                    .orElseThrow(() -> new RuntimeException("학생 정보를 찾을 수 없습니다."));
 
-            // 과목 조회
-            Subject subject = subjectRepository.findById(subjectId).orElse(null);
-            if (subject == null) {
-                return ResponseEntity.badRequest()
-                        .body(new AIResponseDTO<>(0, "과목을 찾을 수 없습니다. ID: " + subjectId, null));
-            }
-
-            // 테스트용 AIAnalysisResult 생성
-            AIAnalysisResult testResult = createTestAnalysisResult(student, subject, riskLevel);
+            // 과목 정보 조회
+            Subject subject = subjectRepository.findById(result.getSubjectId())
+                    .orElseThrow(() -> new RuntimeException("과목 정보를 찾을 수 없습니다."));
 
             // 이메일 발송
-            log.info("테스트 이메일 발송 시작: 학생={}, 과목={}, 위험도={}",
-                    student.getName(), subject.getName(), riskLevel);
+            riskEmailService.sendRiskEmailToStudent(
+                    student,
+                    subject,
+                    result.getOverallRisk(),
+                    result
+            );
 
-            riskEmailService.sendRiskEmailToStudent(student, subject, riskLevel, testResult);
+            log.info("학생 이메일 전송 완료: 학생={}, 이메일={}", student.getName(), student.getEmail());
 
-            if (student.getAdvisor() != null) {
-                riskEmailService.sendRiskEmailToProfessor(student, subject, riskLevel, testResult);
-            }
-
-            Map<String, Object> result = new HashMap<>();
-            result.put("studentName", student.getName());
-            result.put("studentEmail", student.getEmail());
-            result.put("subjectName", subject.getName());
-            result.put("riskLevel", riskLevel);
-            result.put("advisorName", student.getAdvisor() != null ? student.getAdvisor().getName() : null);
-            result.put("advisorEmail", student.getAdvisor() != null ? student.getAdvisor().getEmail() : null);
-
-            return ResponseEntity.ok(new AIResponseDTO<>(1, "테스트 이메일이 발송되었습니다.", result));
+            return ResponseEntity.ok(
+                    createResponse(true, "학생에게 이메일이 발송되었습니다.",
+                            Map.of("studentEmail", student.getEmail()))
+            );
 
         } catch (Exception e) {
-            log.error("테스트 이메일 발송 실패: " + e.getMessage(), e);
-            return ResponseEntity.internalServerError()
-                    .body(new AIResponseDTO<>(0, "이메일 발송 중 오류가 발생했습니다: " + e.getMessage(), null));
+            log.error("학생 이메일 발송 실패", e);
+            return ResponseEntity.status(500).body(
+                    createResponse(false, "이메일 발송 중 오류가 발생했습니다: " + e.getMessage(), null)
+            );
         }
     }
 
     /**
-     * 테스트용 AIAnalysisResult 생성
+     * 특정 학생의 지도교수에게 위험 알림 이메일 전송 테스트
+     * POST /api/email-test/send-to-professor
      */
-    private AIAnalysisResult createTestAnalysisResult(Student student, Subject subject, String riskLevel) {
-        AIAnalysisResult result = new AIAnalysisResult();
-        result.setStudentId(student.getId());
-        result.setSubjectId(subject.getId());
-        result.setStudent(student);
-        result.setSubject(subject);
-        result.setOverallRisk(riskLevel);
+    @PostMapping("/send-to-professor")
+    public ResponseEntity<?> sendEmailToProfessor(@RequestBody Map<String, Integer> request) {
+        try {
+            Integer analysisResultId = request.get("analysisResultId");
 
-        // 테스트 데이터 설정
-        if ("CRITICAL".equals(riskLevel)) {
-            result.setAttendanceStatus("CRITICAL");
-            result.setHomeworkStatus("RISK");
-            result.setMidtermStatus("CAUTION");
-            result.setFinalStatus("NORMAL");
-            result.setTuitionStatus("CAUTION");
-            result.setCounselingStatus("RISK");
-            result.setAnalysisDetail("테스트 메일입니다.\n\n현재 출결 상태가 심각한 수준입니다. 결석 횟수가 기준을 초과했으며, 과제 제출률도 낮은 상태입니다. 조속한 상담이 필요합니다.");
-        } else {
-            result.setAttendanceStatus("CAUTION");
-            result.setHomeworkStatus("RISK");
-            result.setMidtermStatus("NORMAL");
-            result.setFinalStatus("NORMAL");
-            result.setTuitionStatus("NORMAL");
-            result.setCounselingStatus("CAUTION");
-            result.setAnalysisDetail("테스트 메일입니다.\n\n과제 제출에 어려움이 있는 것으로 보입니다. 지도교수님과의 상담을 통해 학업 방향을 점검해보시기 바랍니다.");
+            if (analysisResultId == null) {
+                return ResponseEntity.badRequest().body(
+                        createResponse(false, "분석 결과 ID가 필요합니다.", null)
+                );
+            }
+
+            // AI 분석 결과 조회
+            AIAnalysisResult result = aiAnalysisResultRepository.findById(analysisResultId)
+                    .orElseThrow(() -> new RuntimeException("분석 결과를 찾을 수 없습니다."));
+
+            // 학생 정보 조회
+            Student student = studentRepository.findById(result.getStudentId())
+                    .orElseThrow(() -> new RuntimeException("학생 정보를 찾을 수 없습니다."));
+
+            // 과목 정보 조회
+            Subject subject = subjectRepository.findById(result.getSubjectId())
+                    .orElseThrow(() -> new RuntimeException("과목 정보를 찾을 수 없습니다."));
+
+            // 지도교수 확인
+            if (student.getAdvisor() == null) {
+                return ResponseEntity.badRequest().body(
+                        createResponse(false, "해당 학생의 지도교수가 지정되지 않았습니다.", null)
+                );
+            }
+
+            // 이메일 발송
+            riskEmailService.sendRiskEmailToProfessor(
+                    student,
+                    subject,
+                    result.getOverallRisk(),
+                    result
+            );
+
+            log.info("교수 이메일 전송 완료: 교수={}, 이메일={}",
+                    student.getAdvisor().getName(), student.getAdvisor().getEmail());
+
+            return ResponseEntity.ok(
+                    createResponse(true, "지도교수에게 이메일이 발송되었습니다.",
+                            Map.of("professorEmail", student.getAdvisor().getEmail()))
+            );
+
+        } catch (Exception e) {
+            log.error("교수 이메일 발송 실패", e);
+            return ResponseEntity.status(500).body(
+                    createResponse(false, "이메일 발송 중 오류가 발생했습니다: " + e.getMessage(), null)
+            );
         }
-
-        return result;
     }
 
-    @lombok.Data
-    static class EmailTestRequest {
-        private Integer studentId;
-        private Integer subjectId;
-        private String riskLevel;
+    /**
+     * 학생과 지도교수 모두에게 이메일 발송
+     * POST /api/email-test/send-both
+     */
+    @PostMapping("/send-both")
+    public ResponseEntity<?> sendEmailToBoth(@RequestBody Map<String, Integer> request) {
+        try {
+            Integer analysisResultId = request.get("analysisResultId");
+
+            if (analysisResultId == null) {
+                return ResponseEntity.badRequest().body(
+                        createResponse(false, "분석 결과 ID가 필요합니다.", null)
+                );
+            }
+
+            // AI 분석 결과 조회
+            AIAnalysisResult result = aiAnalysisResultRepository.findById(analysisResultId)
+                    .orElseThrow(() -> new RuntimeException("분석 결과를 찾을 수 없습니다."));
+
+            // 학생 정보 조회
+            Student student = studentRepository.findById(result.getStudentId())
+                    .orElseThrow(() -> new RuntimeException("학생 정보를 찾을 수 없습니다."));
+
+            // 과목 정보 조회
+            Subject subject = subjectRepository.findById(result.getSubjectId())
+                    .orElseThrow(() -> new RuntimeException("과목 정보를 찾을 수 없습니다."));
+
+            Map<String, String> sentEmails = new HashMap<>();
+
+            // 학생에게 이메일 발송
+            riskEmailService.sendRiskEmailToStudent(student, subject, result.getOverallRisk(), result);
+            sentEmails.put("studentEmail", student.getEmail());
+            log.info("학생 이메일 전송 완료: {}", student.getEmail());
+
+            // 지도교수에게 이메일 발송 (있는 경우)
+            if (student.getAdvisor() != null) {
+                riskEmailService.sendRiskEmailToProfessor(student, subject, result.getOverallRisk(), result);
+                sentEmails.put("professorEmail", student.getAdvisor().getEmail());
+                log.info("교수 이메일 전송 완료: {}", student.getAdvisor().getEmail());
+            } else {
+                sentEmails.put("professorEmail", "지도교수 미지정");
+            }
+
+            return ResponseEntity.ok(
+                    createResponse(true, "이메일이 성공적으로 발송되었습니다.", sentEmails)
+            );
+
+        } catch (Exception e) {
+            log.error("이메일 발송 실패", e);
+            return ResponseEntity.status(500).body(
+                    createResponse(false, "이메일 발송 중 오류가 발생했습니다: " + e.getMessage(), null)
+            );
+        }
+    }
+
+    /**
+     * 응답 객체 생성 헬퍼 메서드
+     */
+    private Map<String, Object> createResponse(boolean success, String message, Object data) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", success);
+        response.put("message", message);
+        if (data != null) {
+            response.put("data", data);
+        }
+        return response;
     }
 }
