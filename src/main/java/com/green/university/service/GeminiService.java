@@ -2,8 +2,10 @@ package com.green.university.service;
 
 import com.green.university.repository.model.AIAnalysisResult;
 import com.green.university.repository.model.StuSubDetail;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -16,6 +18,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class GeminiService {
 
@@ -158,80 +161,147 @@ public class GeminiService {
     }
 
     /**
-     * Gemini API 호출
+     * Gemini API 호출 - 개선된 에러 처리
      */
     private String callGeminiApi(String prompt) {
+        int maxRetries = 3;
+        int retryCount = 0;
+
+        while (retryCount < maxRetries) {
+            try {
+                String url = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=" + apiKey;
+
+                // Request Body 구성
+                Map<String, Object> requestBody = new HashMap<>();
+                List<Map<String, Object>> contents = new ArrayList<>();
+                Map<String, Object> content = new HashMap<>();
+                List<Map<String, String>> parts = new ArrayList<>();
+                Map<String, String> part = new HashMap<>();
+                part.put("text", prompt);
+                parts.add(part);
+                content.put("parts", parts);
+                contents.add(content);
+                requestBody.put("contents", contents);
+
+                // HTTP Headers
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+                // API 호출
+                ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+
+                // 응답 파싱
+                JsonNode root = objectMapper.readTree(response.getBody());
+                JsonNode candidates = root.path("candidates");
+
+                if (candidates.isArray() && candidates.size() > 0) {
+                    JsonNode firstCandidate = candidates.get(0);
+                    JsonNode contentNode = firstCandidate.path("content");
+                    JsonNode partsNode = contentNode.path("parts");
+
+                    if (partsNode.isArray() && partsNode.size() > 0) {
+                        String text = partsNode.get(0).path("text").asText();
+                        return text.trim();
+                    }
+                }
+
+                log.warn("⚠️ Gemini 응답에 유효한 내용이 없음");
+                return null;
+
+            } catch (HttpClientErrorException.TooManyRequests e) {
+                retryCount++;
+
+                if (retryCount >= maxRetries) {
+                    log.error("❌ Gemini API 할당량 초과, 최대 재시도 횟수 도달");
+                    return null; // 실패 시 null 반환하여 폴백 로직 사용
+                }
+
+                // 에러 메시지에서 대기 시간 추출
+                String errorBody = e.getResponseBodyAsString();
+                int waitSeconds = extractRetryDelay(errorBody);
+
+                log.warn("⏳ API 할당량 초과, {}초 후 재시도 ({}/{})",
+                        waitSeconds, retryCount, maxRetries);
+
+                try {
+                    Thread.sleep(waitSeconds * 1000L);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    log.error("❌ 재시도 대기 중 인터럽트");
+                    return null;
+                }
+
+            } catch (Exception e) {
+                log.error("❌ Gemini API 호출 실패: {}", e.getMessage());
+                return null; // 실패 시 null 반환
+            }
+        }
+
+        log.error("❌ 최대 재시도 횟수 초과");
+        return null;
+    }
+
+    /**
+     * 에러 메시지에서 재시도 대기 시간 추출
+     */
+    private int extractRetryDelay(String errorMessage) {
         try {
-            String url = "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=" + apiKey;
-
-            // Request Body 구성
-            Map<String, Object> requestBody = new HashMap<>();
-
-            List<Map<String, Object>> contents = new ArrayList<>();
-            Map<String, Object> content = new HashMap<>();
-
-            List<Map<String, String>> parts = new ArrayList<>();
-            Map<String, String> part = new HashMap<>();
-            part.put("text", prompt);
-            parts.add(part);
-
-            content.put("parts", parts);
-            contents.add(content);
-
-            requestBody.put("contents", contents);
-
-            // HTTP Headers
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-
-            // API 호출
-            ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
-
-            // 응답 파싱
-            JsonNode root = objectMapper.readTree(response.getBody());
-            JsonNode candidates = root.path("candidates");
-
-            if (candidates.isArray() && candidates.size() > 0) {
-                JsonNode firstCandidate = candidates.get(0);
-                JsonNode contentNode = firstCandidate.path("content");
-                JsonNode partsNode = contentNode.path("parts");
-
-                if (partsNode.isArray() && partsNode.size() > 0) {
-                    String text = partsNode.get(0).path("text").asText();
-                    return text.trim();
+            if (errorMessage != null && errorMessage.contains("Please retry in")) {
+                String[] parts = errorMessage.split("Please retry in ");
+                if (parts.length > 1) {
+                    String delayStr = parts[1].split("s")[0].trim();
+                    double delaySeconds = Double.parseDouble(delayStr);
+                    // 안전하게 5초 추가
+                    return (int) Math.ceil(delaySeconds) + 5;
                 }
             }
-
-            return "NORMAL";
-
         } catch (Exception e) {
-            System.err.println("Gemini API 호출 실패: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Gemini API 호출 실패", e);
+            log.warn("⚠️ 재시도 대기 시간 파싱 실패", e);
         }
+        return 60; // 파싱 실패 시 기본 60초
     }
+
 
     /**
      * Gemini 응답에서 위험도 파싱
      */
     private String parseRiskLevel(String response) {
         if (response == null || response.isEmpty()) {
-            return "NORMAL";
+            log.warn("⚠️ 응답이 비어있음");
+            return null;
         }
 
         String upperResponse = response.toUpperCase().trim();
 
-        if (upperResponse.contains("CRITICAL")) {
+        // 정확히 한 단어만 응답한 경우 (가장 이상적)
+        if (upperResponse.equals("CRITICAL")) {
             return "CRITICAL";
-        } else if (upperResponse.contains("RISK")) {
+        } else if (upperResponse.equals("RISK")) {
             return "RISK";
-        } else if (upperResponse.contains("CAUTION")) {
+        } else if (upperResponse.equals("CAUTION")) {
             return "CAUTION";
-        } else {
+        } else if (upperResponse.equals("NORMAL")) {
             return "NORMAL";
         }
+
+        // 문장 속에 포함된 경우
+        if (upperResponse.contains("CRITICAL")) {
+            log.warn("⚠️ 응답에 부가 텍스트 포함: {}", response);
+            return "CRITICAL";
+        } else if (upperResponse.contains("RISK")) {
+            log.warn("⚠️ 응답에 부가 텍스트 포함: {}", response);
+            return "RISK";
+        } else if (upperResponse.contains("CAUTION")) {
+            log.warn("⚠️ 응답에 부가 텍스트 포함: {}", response);
+            return "CAUTION";
+        } else if (upperResponse.contains("NORMAL")) {
+            log.warn("⚠️ 응답에 부가 텍스트 포함: {}", response);
+            return "NORMAL";
+        }
+
+        log.error("❌ 유효하지 않은 위험도 응답: {}", response);
+        return null;
     }
 
     /**
@@ -374,4 +444,129 @@ public class GeminiService {
             );
         }
     }
+
+    /**
+     * AI 기반 중도이탈 위험 종합 예측 - 안정성 강화
+     */
+    public String predictOverallDropoutRisk(AIAnalysisResult result, StuSubDetail detail) {
+        try {
+            // 데이터 준비
+            int absent = detail != null && detail.getAbsent() != null ? detail.getAbsent() : 0;
+            int lateness = detail != null && detail.getLateness() != null ? detail.getLateness() : 0;
+            int homework = detail != null && detail.getHomework() != null ? detail.getHomework() : 0;
+            int midExam = detail != null && detail.getMidExam() != null ? detail.getMidExam() : 0;
+            int finalExam = detail != null && detail.getFinalExam() != null ? detail.getFinalExam() : 0;
+
+            String tuitionStatus = result.getTuitionStatus() != null ? result.getTuitionStatus() : "NORMAL";
+            String counselingStatus = result.getCounselingStatus() != null ? result.getCounselingStatus() : "NORMAL";
+
+            // ⭐ 개선된 프롬프트: 더 명확한 지시사항
+            String prompt = String.format(
+                    "당신은 대학생 중도이탈 위험 예측 전문 AI입니다. 다음 학생 데이터를 종합 분석하여 중도이탈 위험도를 정확히 판단해주세요.\n\n" +
+
+                            "=== 학생 학업 데이터 ===\n" +
+                            "📊 출석 상황:\n" +
+                            "   - 결석: %d회\n" +
+                            "   - 지각: %d회\n" +
+                            "   - 환산 결석: %.1f회 (지각 3회 = 결석 1회)\n" +
+                            "   - 참고: 환산 결석 3회 이상이면 F학점 자동 부여\n\n" +
+
+                            "📝 과제 및 성적:\n" +
+                            "   - 과제 점수: %d점 (100점 만점)\n" +
+                            "   - 중간고사: %d점 (100점 만점)\n" +
+                            "   - 기말고사: %d점 (100점 만점)\n" +
+                            "   - 시험 평균: %.1f점\n\n" +
+
+                            "💰 등록금 상태: %s\n" +
+                            "   (NORMAL=납부완료, CAUTION=미납, CRITICAL=장기미납)\n\n" +
+
+                            "🗣️ 상담 분석 결과: %s\n" +
+                            "   (이미 AI가 상담 내용을 분석한 위험도)\n" +
+                            "   (NORMAL=문제없음, CAUTION=주의, RISK=위험, CRITICAL=매우위험)\n\n" +
+
+                            "=== 위험도 판단 기준 (매우 중요!) ===\n\n" +
+
+                            "**CRITICAL** (매우 위험 - 즉각 개입 필요):\n" +
+                            "• F학점 확정 가능성이 매우 높음:\n" +
+                            "  - 환산 결석 3회 이상 (자동 F학점)\n" +
+                            "  - 시험 평균 30점 미만\n" +
+                            "  - 중간/기말 둘 다 40점 미만\n" +
+                            "• 2개 이상 영역에서 심각한 문제 동시 발생\n" +
+                            "• 상담 분석 결과가 CRITICAL\n" +
+                            "• 등록금 미납 + 학업 부진 복합\n" +
+                            "• 학업 포기 징후가 명확함\n\n" +
+
+                            "**RISK** (위험 - 집중 관리 필요):\n" +
+                            "• F학점 가능성이 있음:\n" +
+                            "  - 환산 결석 2~2.9회\n" +
+                            "  - 시험 평균 30~50점\n" +
+                            "  - 과제 40점 미만\n" +
+                            "• 1개 영역이 CRITICAL이지만 다른 영역은 괜찮음\n" +
+                            "• 2개 이상 영역에서 위험 신호\n" +
+                            "• 상담 분석 결과가 RISK\n" +
+                            "• 학업 동기 저하가 뚜렷함\n\n" +
+
+                            "**CAUTION** (주의 - 모니터링 필요):\n" +
+                            "• 한계선에 있음:\n" +
+                            "  - 환산 결석 1~1.9회\n" +
+                            "  - 시험 평균 50~65점\n" +
+                            "  - 과제 50~70점\n" +
+                            "• 1개 영역에서만 위험 신호\n" +
+                            "• 일시적 학업 부진\n" +
+                            "• 개선 가능성이 있지만 지켜봐야 함\n\n" +
+
+                            "**NORMAL** (정상):\n" +
+                            "• 대부분 영역에서 양호\n" +
+                            "• 출석률 90%% 이상 (환산 결석 1회 미만)\n" +
+                            "• 시험 평균 65점 이상\n" +
+                            "• 과제 70점 이상\n" +
+                            "• 일부 부족함이 있어도 전체적으로 관리 가능한 수준\n\n" +
+
+                            "=== 중요 판단 원칙 ===\n" +
+                            "1. **복합적 상황 우선**: 여러 문제가 동시 발생하면 위험도 상승\n" +
+                            "2. **F학점 위험 중시**: 출석 미달(환산 3회)이나 극심한 성적 저하는 CRITICAL\n" +
+                            "3. **상담 결과 반영**: 상담에서 심각한 문제가 포착되면 가중\n" +
+                            "4. **맥락 고려**: 단일 지표만으로 판단하지 말고 전체 패턴 분석\n" +
+                            "5. **보수적 판단**: 애매하면 한 단계 높은 위험도로 판단 (조기 개입이 낫다)\n\n" +
+
+                            "=== 출력 형식 (절대 준수!) ===\n" +
+                            "위 데이터를 종합 분석하여 **정확히 한 단어만** 응답하세요:\n" +
+                            "CRITICAL, RISK, CAUTION, NORMAL\n\n" +
+
+                            "다른 설명이나 부가 텍스트 없이 위험도 단어 하나만 출력하세요.\n" +
+                            "예시: RISK",
+                    absent,
+                    lateness,
+                    absent + (lateness / 3.0),
+                    homework,
+                    midExam,
+                    finalExam,
+                    (midExam + finalExam) / 2.0,
+                    tuitionStatus,
+                    counselingStatus
+            );
+
+            log.info("🤖 Gemini API 호출 시작 (종합 위험도 예측)");
+            String geminiResponse = callGeminiApi(prompt);
+
+            if (geminiResponse == null || geminiResponse.trim().isEmpty()) {
+                log.warn("⚠️ Gemini 응답이 비어있음");
+                return null;
+            }
+
+            String riskLevel = parseRiskLevel(geminiResponse);
+
+            log.info("✅ AI 예측 완료: 입력=\"{}...\", 응답=\"{}\", 파싱=\"{}\"",
+                    geminiResponse.substring(0, Math.min(50, geminiResponse.length())),
+                    geminiResponse.trim(),
+                    riskLevel);
+
+            return riskLevel;
+
+        } catch (Exception e) {
+            log.error("❌ AI 예측 실패: {}", e.getMessage(), e);
+            return null; // null 반환 시 폴백 로직 사용
+        }
+    }
+
 }

@@ -44,6 +44,8 @@ public class AIAnalysisResultService {
     private final SubjectJpaRepository subjectRepository;
     private final NotificationJpaRepository notificationRepo;
 
+    private final MultiAIService multiAIService;
+
     @Autowired
     private StudentJpaRepository studentJpaRepository;
 
@@ -106,6 +108,41 @@ public class AIAnalysisResultService {
     /**
      * 학생-과목별 분석 수행 및 저장
      */
+//    @Transactional
+//    private AIAnalysisResult analyzeAndSaveStudent(Integer studentId, Integer subjectId,
+//                                                   Integer year, Integer semester,
+//                                                   StuSubDetail enrollment) {
+//        AIAnalysisResult result = new AIAnalysisResult();
+//        result.setStudentId(studentId);
+//        result.setSubjectId(subjectId);
+//        result.setStudent(enrollment.getStudent());
+//        result.setSubject(enrollment.getSubject());
+//        result.setAnalysisYear(year);
+//        result.setSemester(semester);
+//
+//        result.setAttendanceStatus(analyzeAttendance(studentId, subjectId));
+//        result.setHomeworkStatus(analyzeHomework(studentId, subjectId));
+//        result.setMidtermStatus(analyzeMidterm(studentId, subjectId));
+//        result.setFinalStatus(analyzeFinal(studentId, subjectId));
+//        result.setTuitionStatus(analyzeTuition(studentId, year, semester));
+//        result.setCounselingStatus(analyzeCounseling(studentId, subjectId));
+//
+//        result.setOverallRisk(calculateOverallRisk(result));
+//
+//        if ("RISK".equals(result.getOverallRisk()) || "CRITICAL".equals(result.getOverallRisk())) {
+//            try {
+//                String aiComment = geminiService.generateRiskComment(result, enrollment);
+//                result.setAnalysisDetail(aiComment);
+//            } catch (Exception e) {
+//                System.err.println("AI 코멘트 생성 실패: " + e.getMessage());
+//                result.setAnalysisDetail(null);
+//            }
+//        }
+//
+//        return aiAnalysisResultRepository.save(result);
+//    }
+    // AIAnalysisResultService.java
+
     @Transactional
     private AIAnalysisResult analyzeAndSaveStudent(Integer studentId, Integer subjectId,
                                                    Integer year, Integer semester,
@@ -118,6 +155,7 @@ public class AIAnalysisResultService {
         result.setAnalysisYear(year);
         result.setSemester(semester);
 
+        // 1단계: 기존 규칙 기반 분석 (각 항목별)
         result.setAttendanceStatus(analyzeAttendance(studentId, subjectId));
         result.setHomeworkStatus(analyzeHomework(studentId, subjectId));
         result.setMidtermStatus(analyzeMidterm(studentId, subjectId));
@@ -125,14 +163,34 @@ public class AIAnalysisResultService {
         result.setTuitionStatus(analyzeTuition(studentId, year, semester));
         result.setCounselingStatus(analyzeCounseling(studentId, subjectId));
 
-        result.setOverallRisk(calculateOverallRisk(result));
+        // 2단계: AI 종합 예측으로 최종 위험도 결정
+        try {
+            String aiPredictedRisk = geminiService.predictOverallDropoutRisk(result, enrollment);
 
+            if (aiPredictedRisk != null) {
+                // AI 예측 성공 - AI 판단 사용
+                result.setOverallRisk(aiPredictedRisk);
+                System.out.println("AI 예측 사용: " + aiPredictedRisk);
+            } else {
+                // AI 예측 실패 - 기존 규칙 기반 사용
+                String ruleBasedRisk = calculateOverallRisk(result);
+                result.setOverallRisk(ruleBasedRisk);
+                System.out.println("규칙 기반 폴백: " + ruleBasedRisk);
+            }
+        } catch (Exception e) {
+            // 예외 발생 시 안전하게 규칙 기반으로 폴백
+            String ruleBasedRisk = calculateOverallRisk(result);
+            result.setOverallRisk(ruleBasedRisk);
+            System.err.println("AI 예측 실패, 규칙 기반 사용: " + e.getMessage());
+        }
+
+        // 3단계: RISK/CRITICAL이면 상세 코멘트 생성
         if ("RISK".equals(result.getOverallRisk()) || "CRITICAL".equals(result.getOverallRisk())) {
             try {
                 String aiComment = geminiService.generateRiskComment(result, enrollment);
                 result.setAnalysisDetail(aiComment);
             } catch (Exception e) {
-                System.err.println("AI 코멘트 생성 실패: " + e.getMessage());
+                log.error("AI 코멘트 생성 실패: " + e.getMessage(), e);
                 result.setAnalysisDetail(null);
             }
         }
@@ -524,29 +582,96 @@ public class AIAnalysisResultService {
     /**
      * AI 분석 실행 - DB에 저장
      */
+//    @Transactional
+//    public AIAnalysisResult analyzeStudent(Integer studentId, Integer subjectId,
+//                                           Integer year, Integer semester) {
+//        AIAnalysisResult existingResult = getLatestAnalysisResult(studentId, subjectId);
+//
+//        StuSubDetail detail = stuSubDetailRepository
+//                .findByStudentIdAndSubjectId(studentId, subjectId)
+//                .orElse(null);
+//
+//        AIAnalysisResult result;
+//        if (existingResult != null &&
+//                existingResult.getAnalyzedAt().toLocalDate().equals(LocalDateTime.now().toLocalDate())) {
+//            result = existingResult;
+//        } else {
+//            result = new AIAnalysisResult();
+//            result.setStudentId(studentId);
+//            result.setSubjectId(subjectId);
+//            result.setStudent(detail.getStudent());
+//            result.setSubject(detail.getSubject());
+//            result.setAnalysisYear(year);
+//            result.setSemester(semester);
+//        }
+//
+//        result.setAttendanceStatus(analyzeAttendance(studentId, subjectId));
+//        result.setHomeworkStatus(analyzeHomework(studentId, subjectId));
+//        result.setMidtermStatus(analyzeMidterm(studentId, subjectId));
+//        result.setFinalStatus(analyzeFinal(studentId, subjectId));
+//        result.setTuitionStatus(analyzeTuition(studentId, year, semester));
+//        result.setCounselingStatus(analyzeCounseling(studentId, subjectId));
+//
+//        String previousRisk = result.getOverallRisk();
+//        String newRisk = calculateOverallRisk(result);
+//        result.setOverallRisk(newRisk);
+//
+//        if ("RISK".equals(newRisk) || "CRITICAL".equals(newRisk)) {
+//            try {
+//                String aiComment = geminiService.generateRiskComment(result, detail);
+//                result.setAnalysisDetail(aiComment);
+//            } catch (Exception e) {
+//                log.error("AI 코멘트 생성 실패: " + e.getMessage(), e);
+//                result.setAnalysisDetail(null);
+//            }
+//        } else {
+//            result.setAnalysisDetail(null);
+//        }
+//
+//        AIAnalysisResult saved = aiAnalysisResultRepository.save(result);
+//
+//        log.info("위험도 분석 결과: 학생 ID={}, 과목 ID={}, 이전 위험도={}, 새 위험도={}",
+//                studentId, subjectId, previousRisk, newRisk);
+//
+//        if (newRisk.equals("RISK") || newRisk.equals("CRITICAL")) {
+//            log.info("위험 알림 발송: 학생 ID={}, 과목 ID={}, 위험도={}",
+//                    studentId, subjectId, newRisk);
+//            sendRiskNotifications(saved, newRisk);
+//        } else {
+//            log.debug("위험도가 NORMAL 또는 CAUTION: 학생 ID={}, 과목 ID={}, 위험도={}",
+//                    studentId, subjectId, newRisk);
+//        }
+//
+//        return saved;
+//    }
+
+    /**
+     * AI 분석 실행 - MultiAI 버전
+     */
     @Transactional
     public AIAnalysisResult analyzeStudent(Integer studentId, Integer subjectId,
                                            Integer year, Integer semester) {
-        AIAnalysisResult existingResult = getLatestAnalysisResult(studentId, subjectId);
+        long startTime = System.currentTimeMillis();
 
+        AIAnalysisResult existingResult = getLatestAnalysisResult(studentId, subjectId);
         StuSubDetail detail = stuSubDetailRepository
                 .findByStudentIdAndSubjectId(studentId, subjectId)
                 .orElse(null);
 
         AIAnalysisResult result;
-        if (existingResult != null &&
-                existingResult.getAnalyzedAt().toLocalDate().equals(LocalDateTime.now().toLocalDate())) {
+        if (existingResult != null) {
             result = existingResult;
         } else {
             result = new AIAnalysisResult();
             result.setStudentId(studentId);
             result.setSubjectId(subjectId);
-            result.setStudent(detail.getStudent());
-            result.setSubject(detail.getSubject());
+            result.setStudent(detail != null ? detail.getStudent() : null);
+            result.setSubject(detail != null ? detail.getSubject() : null);
             result.setAnalysisYear(year);
             result.setSemester(semester);
         }
 
+        // 1단계: 규칙 기반 각 항목별 분석
         result.setAttendanceStatus(analyzeAttendance(studentId, subjectId));
         result.setHomeworkStatus(analyzeHomework(studentId, subjectId));
         result.setMidtermStatus(analyzeMidterm(studentId, subjectId));
@@ -555,16 +680,58 @@ public class AIAnalysisResultService {
         result.setCounselingStatus(analyzeCounseling(studentId, subjectId));
 
         String previousRisk = result.getOverallRisk();
-        String newRisk = calculateOverallRisk(result);
-        result.setOverallRisk(newRisk);
 
-        if ("RISK".equals(newRisk) || "CRITICAL".equals(newRisk)) {
+        // 2단계: 규칙 기반 위험도도 계산 (검증용)
+        String ruleBasedRisk = calculateOverallRisk(result);
+
+        // 3단계: AI 종합 예측
+        String aiPredictedRisk = null;
+        try {
+            log.info("🤖 AI 종합 예측 시작: 학생={}, 과목={}", studentId, subjectId);
+            aiPredictedRisk = multiAIService.predictOverallDropoutRisk(result, detail);
+
+            if (aiPredictedRisk != null && isValidRiskLevel(aiPredictedRisk)) {
+                log.info("✅ AI 예측: {}", aiPredictedRisk);
+            } else {
+                log.warn("⚠️ AI 예측 실패");
+                aiPredictedRisk = null;
+            }
+        } catch (Exception e) {
+            log.error("❌ AI 예측 에러: {}", e.getMessage());
+            aiPredictedRisk = null;
+        }
+
+        // 4단계: ⭐ AI 판단 검증 및 보정
+        String finalRisk;
+        if (aiPredictedRisk != null) {
+            // AI 판단이 규칙 기반보다 과도하게 낮거나 높으면 보정
+            finalRisk = validateAndCorrectAIPrediction(
+                    aiPredictedRisk,
+                    ruleBasedRisk,
+                    result,
+                    detail
+            );
+
+            if (!finalRisk.equals(aiPredictedRisk)) {
+                log.warn("⚠️ AI 판단 보정: AI={} → 최종={} (규칙={}, 이유=검증 실패)",
+                        aiPredictedRisk, finalRisk, ruleBasedRisk);
+            }
+        } else {
+            // AI 실패 시 규칙 기반 사용
+            finalRisk = ruleBasedRisk;
+            log.warn("⚠️ AI 실패, 규칙 기반 사용: {}", ruleBasedRisk);
+        }
+
+        result.setOverallRisk(finalRisk);
+
+        // 5단계: RISK/CRITICAL만 AI 상세 코멘트
+        if ("RISK".equals(finalRisk) || "CRITICAL".equals(finalRisk)) {
             try {
-                String aiComment = geminiService.generateRiskComment(result, detail);
+                String aiComment = multiAIService.generateRiskComment(result, detail);
                 result.setAnalysisDetail(aiComment);
             } catch (Exception e) {
-                log.error("AI 코멘트 생성 실패: " + e.getMessage(), e);
-                result.setAnalysisDetail(null);
+                log.warn("⚠️ AI 코멘트 실패: {}", e.getMessage());
+                result.setAnalysisDetail(generateFallbackComment(result, detail));
             }
         } else {
             result.setAnalysisDetail(null);
@@ -572,48 +739,278 @@ public class AIAnalysisResultService {
 
         AIAnalysisResult saved = aiAnalysisResultRepository.save(result);
 
-        log.info("위험도 분석 결과: 학생 ID={}, 과목 ID={}, 이전 위험도={}, 새 위험도={}",
-                studentId, subjectId, previousRisk, newRisk);
+        log.info("📊 분석 완료: 학생={}, 과목={}, AI={}, 규칙={}, 최종={}, 소요={}ms",
+                studentId, subjectId, aiPredictedRisk, ruleBasedRisk, finalRisk,
+                System.currentTimeMillis() - startTime);
 
-        if (newRisk.equals("RISK") || newRisk.equals("CRITICAL")) {
-            log.info("위험 알림 발송: 학생 ID={}, 과목 ID={}, 위험도={}",
-                    studentId, subjectId, newRisk);
-            sendRiskNotifications(saved, newRisk);
-        } else {
-            log.debug("위험도가 NORMAL 또는 CAUTION: 학생 ID={}, 과목 ID={}, 위험도={}",
-                    studentId, subjectId, newRisk);
+        if ("RISK".equals(finalRisk) || "CRITICAL".equals(finalRisk)) {
+            sendRiskNotifications(saved, finalRisk);
         }
 
         return saved;
     }
 
     /**
-     * 전체 학생-과목에 대한 일괄 AI 분석 실행
+     * ⭐ AI 판단 검증 및 보정 로직
+     *
+     * AI가 명백히 잘못 판단한 경우 규칙 기반으로 보정
+     */
+    private String validateAndCorrectAIPrediction(
+            String aiRisk,
+            String ruleBasedRisk,
+            AIAnalysisResult result,
+            StuSubDetail detail) {
+
+        // 각 상태 카운트
+        int criticalCount = 0;
+        int riskCount = 0;
+        int cautionCount = 0;
+        int normalCount = 0;
+
+        String[] statuses = {
+                result.getAttendanceStatus(),
+                result.getHomeworkStatus(),
+                result.getMidtermStatus(),
+                result.getFinalStatus(),
+                result.getTuitionStatus(),
+                result.getCounselingStatus()
+        };
+
+        for (String status : statuses) {
+            if (status == null) continue;
+            switch (status) {
+                case "CRITICAL": criticalCount++; break;
+                case "RISK": riskCount++; break;
+                case "CAUTION": cautionCount++; break;
+                case "NORMAL": normalCount++; break;
+            }
+        }
+
+        // ===== 검증 규칙 =====
+
+        // 규칙 1: CRITICAL 1개 이상 있는데 AI가 NORMAL/CAUTION → 보정
+        if (criticalCount >= 1 && ("NORMAL".equals(aiRisk) || "CAUTION".equals(aiRisk))) {
+            log.warn("⚠️ 검증 실패: CRITICAL {}개 있는데 AI={} → CRITICAL로 보정",
+                    criticalCount, aiRisk);
+            return "CRITICAL";
+        }
+
+        // 규칙 2: 모두 NORMAL인데 AI가 CRITICAL/RISK → 보정
+        if (normalCount == 6 && ("CRITICAL".equals(aiRisk) || "RISK".equals(aiRisk))) {
+            log.warn("⚠️ 검증 실패: 모두 NORMAL인데 AI={} → NORMAL로 보정", aiRisk);
+            return "NORMAL";
+        }
+
+        // 규칙 3: 등록금만 CAUTION이고 나머지 NORMAL인데 AI가 CRITICAL → 보정
+        if ("CAUTION".equals(result.getTuitionStatus()) &&
+                "NORMAL".equals(result.getAttendanceStatus()) &&
+                "NORMAL".equals(result.getHomeworkStatus()) &&
+                "NORMAL".equals(result.getMidtermStatus()) &&
+                "NORMAL".equals(result.getFinalStatus()) &&
+                "NORMAL".equals(result.getCounselingStatus()) &&
+                "CRITICAL".equals(aiRisk)) {
+
+            log.warn("⚠️ 검증 실패: 등록금만 CAUTION인데 AI=CRITICAL → CAUTION으로 보정");
+            return "CAUTION";
+        }
+
+        // 규칙 4: F학점 확정 (환산 결석 3회 이상)인데 AI가 NORMAL/CAUTION → 보정
+        if (detail != null) {
+            int absent = detail.getAbsent() != null ? detail.getAbsent() : 0;
+            int lateness = detail.getLateness() != null ? detail.getLateness() : 0;
+            double totalAbsent = absent + (lateness / 3.0);
+
+            if (totalAbsent >= 3.0 && ("NORMAL".equals(aiRisk) || "CAUTION".equals(aiRisk))) {
+                log.warn("⚠️ 검증 실패: F학점 확정 (환산결석 {})인데 AI={} → CRITICAL로 보정",
+                        totalAbsent, aiRisk);
+                return "CRITICAL";
+            }
+        }
+
+        // 규칙 5: RISK 2개 이상인데 AI가 NORMAL → 보정
+        if (riskCount >= 2 && "NORMAL".equals(aiRisk)) {
+            log.warn("⚠️ 검증 실패: RISK {}개인데 AI=NORMAL → RISK로 보정", riskCount);
+            return "RISK";
+        }
+
+        // 규칙 6: AI와 규칙 기반 차이가 2단계 이상 → 규칙 기반 우선
+        int aiLevel = getRiskPriority(aiRisk);
+        int ruleLevel = getRiskPriority(ruleBasedRisk);
+
+        if (Math.abs(aiLevel - ruleLevel) >= 2) {
+            log.warn("⚠️ 검증 실패: AI({})와 규칙({}) 차이 2단계 이상 → 규칙 우선",
+                    aiRisk, ruleBasedRisk);
+            return ruleBasedRisk;
+        }
+
+        // 검증 통과 - AI 판단 사용
+        return aiRisk;
+    }
+
+
+
+    /**
+     * 전체 학생-과목에 대한 일괄 AI 분석 실행 (Rate Limit 고려)
      */
     @Transactional
     public int analyzeAllStudentsAndSubjects(Integer year, Integer semester) {
         List<StuSubDetail> allEnrollments = stuSubDetailRepository.findAllWithStudentAndSubject();
 
         int successCount = 0;
+        int apiCallCount = 0;
+        int riskCount = 0;
+        int normalCount = 0;
 
-        for (StuSubDetail enrollment : allEnrollments) {
+        // Gemini 무료 tier: 분당 15개 제한
+        int maxApiCallsPerMinute = 12; // 안전 마진
+        long startTime = System.currentTimeMillis();
+        long lastBatchTime = startTime;
+
+        log.info("📊 총 {}개의 학생-과목 AI 분석 시작 (최적화 버전)", allEnrollments.size());
+
+        for (int i = 0; i < allEnrollments.size(); i++) {
+            StuSubDetail enrollment = allEnrollments.get(i);
+
             try {
-                analyzeStudent(
+                // API 호출 횟수 체크
+                if (apiCallCount >= maxApiCallsPerMinute) {
+                    long elapsed = System.currentTimeMillis() - lastBatchTime;
+                    long waitTime = 60000 - elapsed; // 1분 - 경과 시간
+
+                    if (waitTime > 0) {
+                        log.info("⏱️ Rate Limit 방지 대기: {}초...", waitTime / 1000);
+                        Thread.sleep(waitTime);
+                    }
+
+                    apiCallCount = 0;
+                    lastBatchTime = System.currentTimeMillis();
+                }
+
+                AIAnalysisResult result = analyzeStudent(
                         enrollment.getStudentId(),
                         enrollment.getSubjectId(),
                         year != null ? year :
-                                (enrollment.getSubject() != null ? enrollment.getSubject().getSubYear() : null),
+                                (enrollment.getSubject() != null ?
+                                        enrollment.getSubject().getSubYear() : null),
                         semester != null ? semester :
-                                (enrollment.getSubject() != null ? enrollment.getSubject().getSemester() : null)
+                                (enrollment.getSubject() != null ?
+                                        enrollment.getSubject().getSemester() : null)
                 );
+
                 successCount++;
+
+                // API 호출 카운트
+                apiCallCount++; // AI 예측 1회
+
+                if ("RISK".equals(result.getOverallRisk()) ||
+                        "CRITICAL".equals(result.getOverallRisk())) {
+                    riskCount++;
+                    apiCallCount++; // AI 코멘트 1회
+                } else {
+                    normalCount++;
+                }
+
+                // 진행 상황 로그
+                if ((i + 1) % 5 == 0 || (i + 1) == allEnrollments.size()) {
+                    long elapsed = System.currentTimeMillis() - startTime;
+                    double avgTime = elapsed / (double) successCount;
+                    long estimatedRemaining = (long) (avgTime * (allEnrollments.size() - successCount));
+
+                    log.info("📈 진행: {}/{}명 | NORMAL: {}명, RISK+: {}명 | " +
+                                    "API: {}회 | 평균: {}ms/건 | 예상 남은 시간: {}초",
+                            successCount, allEnrollments.size(),
+                            normalCount, riskCount,
+                            apiCallCount,
+                            String.format("%.0f", avgTime),
+                            estimatedRemaining / 1000);
+                }
+
+                // 배치 간 짧은 대기 (0.5초)
+                Thread.sleep(500);
+
             } catch (Exception e) {
-                System.err.println("학생 " + enrollment.getStudentId() +
-                        ", 과목 " + enrollment.getSubjectId() + " 분석 실패: " + e.getMessage());
+                log.error("학생 {}, 과목 {} 분석 실패: {}",
+                        enrollment.getStudentId(), enrollment.getSubjectId(), e.getMessage());
+
+                // Rate limit 에러면 중단
+                if (e.getMessage() != null && e.getMessage().contains("할당량")) {
+                    log.error("❌ API 할당량 초과로 배치 분석 중단");
+                    break;
+                }
             }
         }
 
+        long totalTime = System.currentTimeMillis() - startTime;
+
+        log.info("✅ 배치 분석 완료: {}/{}명 성공 | " +
+                        "NORMAL: {}명, RISK+: {}명 | " +
+                        "총 소요: {}초 (평균 {}/건)",
+                successCount, allEnrollments.size(),
+                normalCount, riskCount,
+                totalTime / 1000,
+                String.format("%.1f초", totalTime / 1000.0 / successCount));
+
         return successCount;
+    }
+
+
+    /**
+     * 위험도 레벨 유효성 검증
+     */
+    private boolean isValidRiskLevel(String riskLevel) {
+        if (riskLevel == null) {
+            return false;
+        }
+        return riskLevel.equals("NORMAL") ||
+                riskLevel.equals("CAUTION") ||
+                riskLevel.equals("RISK") ||
+                riskLevel.equals("CRITICAL");
+    }
+    /**
+     * AI 코멘트 생성 실패 시 폴백 메시지
+     */
+    private String generateFallbackComment(AIAnalysisResult result, StuSubDetail detail) {
+        StringBuilder comment = new StringBuilder();
+        List<String> issues = new ArrayList<>();
+
+        if (!"NORMAL".equals(result.getAttendanceStatus())) {
+            int absent = detail != null && detail.getAbsent() != null ? detail.getAbsent() : 0;
+            int lateness = detail != null && detail.getLateness() != null ? detail.getLateness() : 0;
+            issues.add(String.format("출석 문제 (결석 %d회, 지각 %d회)", absent, lateness));
+        }
+
+        if (!"NORMAL".equals(result.getHomeworkStatus())) {
+            int homework = detail != null && detail.getHomework() != null ? detail.getHomework() : 0;
+            issues.add(String.format("과제 미흡 (%d점)", homework));
+        }
+
+        if (!"NORMAL".equals(result.getMidtermStatus())) {
+            int midExam = detail != null && detail.getMidExam() != null ? detail.getMidExam() : 0;
+            issues.add(String.format("중간고사 저조 (%d점)", midExam));
+        }
+
+        if (!"NORMAL".equals(result.getFinalStatus())) {
+            int finalExam = detail != null && detail.getFinalExam() != null ? detail.getFinalExam() : 0;
+            issues.add(String.format("기말고사 저조 (%d점)", finalExam));
+        }
+
+        if (!"NORMAL".equals(result.getTuitionStatus())) {
+            issues.add("등록금 미납");
+        }
+
+        if (!"NORMAL".equals(result.getCounselingStatus())) {
+            issues.add("상담 내용에서 위험 신호 감지");
+        }
+
+        if (issues.isEmpty()) {
+            return "모니터링이 필요한 학생입니다.";
+        }
+
+        comment.append("다음 영역에서 문제가 감지되었습니다: ");
+        comment.append(String.join(", ", issues));
+        comment.append(". 즉각적인 학습 지원과 상담이 필요합니다.");
+
+        return comment.toString();
     }
 
     /**
@@ -864,7 +1261,8 @@ public class AIAnalysisResultService {
     }
 
     /**
-     * 종합 위험도 계산
+     * 종합 위험도 계산 - 개선된 로직
+     * 더 합리적이고 일관성 있는 판단 기준 적용
      */
     private String calculateOverallRisk(AIAnalysisResult result) {
         int criticalCount = 0;
@@ -896,6 +1294,7 @@ public class AIAnalysisResultService {
             }
         }
 
+        // 규칙 기반 판정
         if (criticalCount >= 1) {
             return "CRITICAL";
         } else if (riskCount >= 2) {
@@ -906,6 +1305,8 @@ public class AIAnalysisResultService {
             return "NORMAL";
         }
     }
+
+
 
     /**
      * 교수 담당 학생의 분석 결과 조회 - DB 조회
@@ -1163,5 +1564,128 @@ public class AIAnalysisResultService {
         } catch (Exception e) {
             log.error("위험 알림 발송 실패: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 특정 학생의 모든 과목 일괄 분석 (일관성 보장)
+     * 한 학생의 모든 과목을 동시에 분석하여 일관된 기준 적용
+     */
+    @Transactional
+    public List<AIAnalysisResult> analyzeStudentAllSubjects(Integer studentId,
+                                                            Integer year,
+                                                            Integer semester) {
+        log.info("📊 학생 전체 과목 분석 시작: 학생 ID={}", studentId);
+
+        // 해당 학생의 모든 수강 과목 조회
+        List<StuSubDetail> enrollments = stuSubDetailRepository
+                .findByStudentIdWithRelations(studentId);
+
+        if (enrollments.isEmpty()) {
+            log.warn("⚠️ 수강 과목이 없습니다: 학생 ID={}", studentId);
+            return new ArrayList<>();
+        }
+
+        List<AIAnalysisResult> results = new ArrayList<>();
+        boolean aiAvailable = true; // AI 사용 가능 여부
+        String fallbackMethod = null; // 폴백 사용 시 어떤 방법 사용했는지
+
+        for (int i = 0; i < enrollments.size(); i++) {
+            StuSubDetail enrollment = enrollments.get(i);
+            Integer subjectId = enrollment.getSubjectId();
+
+            log.info("📝 과목 분석 [{}/{}]: 학생 ID={}, 과목 ID={}, 과목명={}",
+                    i + 1, enrollments.size(), studentId, subjectId,
+                    enrollment.getSubject() != null ? enrollment.getSubject().getName() : "N/A");
+
+            AIAnalysisResult result = new AIAnalysisResult();
+            result.setStudentId(studentId);
+            result.setSubjectId(subjectId);
+            result.setStudent(enrollment.getStudent());
+            result.setSubject(enrollment.getSubject());
+            result.setAnalysisYear(year != null ? year :
+                    (enrollment.getSubject() != null ? enrollment.getSubject().getSubYear() : null));
+            result.setSemester(semester != null ? semester :
+                    (enrollment.getSubject() != null ? enrollment.getSubject().getSemester() : null));
+
+            // 각 항목별 분석
+            result.setAttendanceStatus(analyzeAttendance(studentId, subjectId));
+            result.setHomeworkStatus(analyzeHomework(studentId, subjectId));
+            result.setMidtermStatus(analyzeMidterm(studentId, subjectId));
+            result.setFinalStatus(analyzeFinal(studentId, subjectId));
+            result.setTuitionStatus(analyzeTuition(studentId,
+                    result.getAnalysisYear(), result.getSemester()));
+            result.setCounselingStatus(analyzeCounseling(studentId, subjectId));
+
+            // 종합 위험도 판정
+            if (aiAvailable) {
+                // AI 사용 시도
+                try {
+                    String aiRisk = geminiService.predictOverallDropoutRisk(result, enrollment);
+
+                    if (aiRisk != null && isValidRiskLevel(aiRisk)) {
+                        result.setOverallRisk(aiRisk);
+                        log.info("✅ AI 예측 성공: 과목 ID={}, 위험도={}", subjectId, aiRisk);
+                    } else {
+                        // 첫 실패 시점에 AI 포기하고 모든 과목 규칙 기반으로 전환
+                        log.warn("⚠️ AI 예측 실패, 나머지 과목도 규칙 기반 사용: 과목 ID={}", subjectId);
+                        aiAvailable = false;
+                        fallbackMethod = "AI 예측 실패";
+
+                        // 실패한 과목도 규칙 기반으로
+                        result.setOverallRisk(calculateOverallRisk(result));
+                    }
+                } catch (Exception e) {
+                    log.error("❌ AI 예측 에러, 규칙 기반으로 전환: {}", e.getMessage());
+                    aiAvailable = false;
+                    fallbackMethod = "AI 에러: " + e.getMessage();
+                    result.setOverallRisk(calculateOverallRisk(result));
+                }
+            } else {
+                // 이미 AI 실패했으므로 규칙 기반 사용
+                result.setOverallRisk(calculateOverallRisk(result));
+                log.info("📏 규칙 기반 사용: 과목 ID={}, 위험도={}",
+                        subjectId, result.getOverallRisk());
+            }
+
+            // AI 코멘트 생성 (RISK/CRITICAL만)
+            if (("RISK".equals(result.getOverallRisk()) ||
+                    "CRITICAL".equals(result.getOverallRisk())) && aiAvailable) {
+                try {
+                    String comment = geminiService.generateRiskComment(result, enrollment);
+                    result.setAnalysisDetail(comment);
+                } catch (Exception e) {
+                    log.warn("⚠️ AI 코멘트 생성 실패: {}", e.getMessage());
+                    result.setAnalysisDetail(generateFallbackComment(result, enrollment));
+                }
+            }
+
+            // 저장
+            AIAnalysisResult saved = aiAnalysisResultRepository.save(result);
+            results.add(saved);
+
+            // Rate Limit 방지 대기 (AI 사용 시)
+            if (aiAvailable && i < enrollments.size() - 1) {
+                try {
+                    Thread.sleep(2000); // 2초 대기
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.error("❌ 대기 중 인터럽트");
+                }
+            }
+        }
+
+        log.info("✅ 학생 전체 과목 분석 완료: 학생 ID={}, 과목 수={}, AI 사용={}, 폴백={}",
+                studentId, results.size(), aiAvailable ? "전체" : "없음",
+                fallbackMethod != null ? fallbackMethod : "없음");
+
+        // 위험 알림 발송 (RISK/CRITICAL 과목만)
+        for (AIAnalysisResult result : results) {
+            if ("RISK".equals(result.getOverallRisk()) ||
+                    "CRITICAL".equals(result.getOverallRisk())) {
+                sendRiskNotifications(result, result.getOverallRisk());
+            }
+        }
+
+        return results;
     }
 }
