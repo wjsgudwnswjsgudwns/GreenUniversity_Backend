@@ -76,7 +76,7 @@ public class MeetingService {
         LocalDateTime end = meeting.getEndAt().toLocalDateTime();
 
         // 시작 10분 전부터 입장 가능
-        if (now.isBefore(start.minusMinutes(1000))) {
+        if (now.isBefore(start.minusMinutes(10))) {
             throw new CustomRestfullException(
                     "회의 시작 10분 전부터 입장이 가능합니다.",
                     HttpStatus.BAD_REQUEST
